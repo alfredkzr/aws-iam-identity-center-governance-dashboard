@@ -360,7 +360,30 @@
     color: var(--aws-blue);
 }
 
-/* ---- Export Dropdown ---- */
+/* ---- Export Dropdown & Actions ---- */
+
+.toolbar__action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-m);
+    font-size: var(--font-xs);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: var(--font-family);
+    height: 32px;
+    white-space: nowrap;
+}
+
+.toolbar__action-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-focus);
+}
 
 .export-dropdown {
     position: relative;

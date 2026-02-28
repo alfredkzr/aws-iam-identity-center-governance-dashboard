@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './Header.css';
 
-function Header({ user, onRefresh, onLogout }) {
+function Header({ user, onLogout }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef(null);
 
@@ -36,18 +36,6 @@ function Header({ user, onRefresh, onLogout }) {
                 </div>
 
                 <div className="header__actions">
-                    <button
-                        className="header__btn header__btn--secondary"
-                        onClick={onRefresh}
-                        title="Refresh data"
-                        id="refresh-button"
-                    >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M14 8a6 6 0 11-1.06-3.39l.5-1.93A8 8 0 108 16a8 8 0 00.01 0h-.02A6 6 0 0114 8z" />
-                            <path d="M14.5 1v3.5H11" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <span>Refresh</span>
-                    </button>
 
                     {user && (
                         <div className="header__user-menu" ref={menuRef}>

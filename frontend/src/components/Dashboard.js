@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import './Dashboard.css';
 import GovernanceCharts from './GovernanceCharts';
 
-function Dashboard({ data, loading, error, availableDates = [], selectedDate, onDateChange }) {
+function Dashboard({ data, loading, error, availableDates = [], selectedDate, onDateChange, onRefresh }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState('all');
     const [sortField, setSortField] = useState('account_name');
@@ -214,6 +214,19 @@ function Dashboard({ data, loading, error, availableDates = [], selectedDate, on
                             Last scan: {new Date(data.generated_at).toLocaleString()}
                         </span>
                     )}
+
+                    <button
+                        className="toolbar__action-btn"
+                        onClick={onRefresh}
+                        title="Refresh data"
+                        id="refresh-button"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M14 8a6 6 0 11-1.06-3.39l.5-1.93A8 8 0 108 16a8 8 0 00.01 0h-.02A6 6 0 0114 8z" />
+                            <path d="M14.5 1v3.5H11" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
 
                     {/* Export dropdown */}
                     <div className="export-dropdown" ref={exportRef}>

@@ -116,7 +116,7 @@ function AppContent() {
 
     return (
         <div className="app">
-            <Header user={user} onRefresh={() => fetchData(selectedDate)} onLogout={logout} />
+            <Header user={user} onLogout={logout} />
             <main className="main-content">
                 <Dashboard
                     data={data}
@@ -125,6 +125,7 @@ function AppContent() {
                     availableDates={availableDates}
                     selectedDate={selectedDate}
                     onDateChange={(newDate) => fetchData(newDate)}
+                    onRefresh={() => fetchData(selectedDate)}
                 />
             </main>
         </div>
