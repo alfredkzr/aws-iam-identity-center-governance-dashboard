@@ -173,16 +173,17 @@ The login page will automatically show a **"Sign in with Okta"** button instead 
 
 ### Production Deployment
 
-For Amplify-hosted deployments, set the Okta variables in your `terraform.tfvars` — Terraform will pass them to Amplify as environment variables automatically. Make sure to update the redirect URI to your Amplify domain:
+For Amplify-hosted deployments, set the Okta variables in your `terraform.tfvars` — Terraform will pass them to Amplify as environment variables automatically:
 
 ```hcl
 # In terraform/terraform.tfvars
-okta_domain       = "your-org.okta.com"
-okta_client_id    = "0oaXXXXXXXXXXXXXXXXX"
-okta_redirect_uri = "https://main.d1234abcde.amplifyapp.com/callback"
+okta_domain    = "your-org.okta.com"
+okta_client_id = "0oaXXXXXXXXXXXXXXXXX"
 ```
 
-Also add the production callback URL to your Okta app's **Sign-in redirect URIs**.
+The redirect URI is **auto-derived** from the Amplify domain (`https://main.<amplify-domain>/callback`), so you don't need to set it.
+
+After deploying, add the production callback URL (`https://main.<your-amplify-domain>.amplifyapp.com/callback`) to your Okta app's **Sign-in redirect URIs**.
 
 ## GitHub Token Setup
 
@@ -243,7 +244,6 @@ github_oauth_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 | `github_oauth_token` | `string` | `""` | GitHub PAT for Amplify ([setup guide](#github-token-setup)) |
 | `okta_domain` | `string` | `""` | Okta domain for SSO (e.g., `your-org.okta.com`) |
 | `okta_client_id` | `string` | `""` | Okta OIDC application client ID |
-| `okta_redirect_uri` | `string` | `""` | OAuth2 redirect URI for the frontend app |
 
 ## Project Structure
 

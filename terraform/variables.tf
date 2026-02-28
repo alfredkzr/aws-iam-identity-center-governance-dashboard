@@ -126,9 +126,3 @@ variable "okta_client_id" {
   type        = string
   default     = ""
 }
-
-variable "okta_redirect_uri" {
-  description = "OAuth2 redirect URI for the frontend app (e.g. https://main.d1234abcde.amplifyapp.com/callback)"
-  type        = string
-  default     = ""
-}

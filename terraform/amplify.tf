@@ -35,7 +35,7 @@ resource "aws_amplify_app" "frontend" {
     REACT_APP_API_ENDPOINT      = aws_lambda_function_url.athena_proxy.function_url
     REACT_APP_OKTA_DOMAIN       = var.okta_domain
     REACT_APP_OKTA_CLIENT_ID    = var.okta_client_id
-    REACT_APP_OKTA_REDIRECT_URI = var.okta_redirect_uri
+    REACT_APP_OKTA_REDIRECT_URI = "https://main.${aws_amplify_app.frontend.default_domain}/callback"
     REACT_APP_AWS_REGION        = var.aws_region
   }
 
