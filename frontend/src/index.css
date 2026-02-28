@@ -1,0 +1,256 @@
+/* ================================================================
+   Design System — AWS Console Theme
+   IAM Identity Center Governance Dashboard
+   ================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* AWS Console Color Palette */
+  --aws-squid-ink: #232f3e;
+  --aws-squid-ink-light: #37475a;
+  --aws-squid-ink-dark: #1a242f;
+  --aws-orange: #ec7211;
+  --aws-orange-hover: #eb5f07;
+  --aws-orange-light: #fef5ec;
+  --aws-blue: #0073bb;
+  --aws-blue-hover: #005a92;
+  --aws-blue-light: #f1faff;
+  --aws-green: #1d8102;
+  --aws-green-light: #f2f8f0;
+  --aws-red: #d13212;
+  --aws-red-light: #fdf3f1;
+  --aws-yellow: #8a6d14;
+  --aws-yellow-light: #fef9e8;
+
+  /* Backgrounds */
+  --bg-page: #f2f3f3;
+  --bg-card: #ffffff;
+  --bg-header: var(--aws-squid-ink);
+  --bg-input: #ffffff;
+  --bg-hover: #f7f7f7;
+  --bg-active: #e9ebed;
+  --bg-selected: #f1faff;
+
+  /* Text */
+  --text-primary: #16191f;
+  --text-secondary: #545b64;
+  --text-muted: #687078;
+  --text-disabled: #aab7b8;
+  --text-inverse: #ffffff;
+  --text-link: var(--aws-blue);
+  --text-link-hover: var(--aws-blue-hover);
+
+  /* Borders */
+  --border-default: #d5dbdb;
+  --border-input: #aab7b8;
+  --border-divider: #eaeded;
+  --border-focus: var(--aws-blue);
+
+  /* Shadows */
+  --shadow-card: 0 1px 1px 0 rgba(0, 28, 36, 0.04),
+    0 1px 4px -1px rgba(0, 28, 36, 0.08);
+  --shadow-dropdown: 0 4px 20px rgba(0, 28, 36, 0.15);
+  --shadow-sticky: 0 1px 4px -1px rgba(0, 28, 36, 0.12);
+
+  /* Typography */
+  --font-family: 'Inter', 'Amazon Ember', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
+  --font-xs: 0.75rem;
+  --font-sm: 0.875rem;
+  --font-base: 0.875rem;
+  --font-lg: 1rem;
+  --font-xl: 1.125rem;
+  --font-2xl: 1.25rem;
+  --font-3xl: 1.75rem;
+
+  /* Spacing */
+  --space-xxs: 0.125rem;
+  --space-xs: 0.25rem;
+  --space-s: 0.5rem;
+  --space-m: 0.75rem;
+  --space-l: 1rem;
+  --space-xl: 1.25rem;
+  --space-xxl: 1.5rem;
+  --space-xxxl: 2rem;
+
+  /* Borders & Radius */
+  --radius-s: 2px;
+  --radius-m: 4px;
+  --radius-l: 8px;
+  --radius-xl: 16px;
+
+  /* Transitions */
+  --transition-fast: 90ms ease;
+  --transition-base: 135ms ease;
+}
+
+/* ================================================================
+   Reset & Base
+   ================================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-size: var(--font-base);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ================================================================
+   Utilities
+   ================================================================ */
+
+/* AWS-style focus ring */
+*:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Shimmer loading */
+.shimmer {
+  background: linear-gradient(90deg,
+      var(--bg-page) 0%,
+      #e8e8e8 50%,
+      var(--bg-page) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Scrollbar — Cloudscape style */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-page);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ================================================================
+   Print Styles
+   ================================================================ */
+
+@media print {
+  body {
+    background: #ffffff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .header,
+  .dashboard__toolbar,
+  .toolbar__search,
+  .toolbar__filters,
+  .toolbar__meta,
+  .export-dropdown,
+  .header__actions {
+    display: none !important;
+  }
+
+  .dashboard {
+    padding: 0;
+    max-width: 100%;
+  }
+
+  .dashboard__stats {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .stat-card {
+    box-shadow: none;
+    border: 1px solid #d5dbdb;
+    page-break-inside: avoid;
+  }
+
+  .dashboard__table-wrapper {
+    box-shadow: none;
+    border: 1px solid #d5dbdb;
+  }
+
+  .dashboard__table {
+    font-size: 10px;
+  }
+
+  .print-header {
+    display: block !important;
+    padding: 16px 0;
+    border-bottom: 2px solid var(--aws-squid-ink);
+    margin-bottom: 16px;
+  }
+
+  .print-header h1 {
+    font-size: 18px;
+    color: var(--aws-squid-ink);
+  }
+
+  .print-header p {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+}

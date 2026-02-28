@@ -1,0 +1,162 @@
+/* ================================================================
+   Header — AWS Console Top Navigation
+   ================================================================ */
+
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header__top-bar {
+    background: var(--bg-header);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-xl);
+    height: 48px;
+    box-shadow: var(--shadow-sticky);
+}
+
+.header__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+}
+
+.header__logo {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: var(--space-xs);
+}
+
+.header__title-group {
+    display: flex;
+    align-items: center;
+}
+
+.header__title {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: var(--text-inverse);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+}
+
+.header__title-accent {
+    font-weight: 700;
+    color: #FF9900;
+    margin-left: 6px;
+}
+
+.header__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-m);
+}
+
+/* AWS-style buttons */
+.header__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: 4px 12px;
+    font-size: var(--font-xs);
+    font-weight: 600;
+    font-family: var(--font-family);
+    border-radius: var(--radius-m);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+    line-height: 1.5;
+    height: 30px;
+}
+
+.header__btn--secondary {
+    background: transparent;
+    color: var(--text-inverse);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.header__btn--secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.header__btn--primary {
+    background: var(--aws-orange);
+    color: var(--text-inverse);
+    border: 1px solid var(--aws-orange);
+}
+
+.header__btn--primary:hover {
+    background: var(--aws-orange-hover);
+    border-color: var(--aws-orange-hover);
+}
+
+/* User Module */
+.header__user {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+    padding: 4px 8px;
+    border-radius: var(--radius-m);
+    cursor: default;
+}
+
+.header__user:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.header__avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--aws-orange);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+}
+
+.header__user-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.header__user-name {
+    font-size: var(--font-xs);
+    font-weight: 500;
+    color: var(--text-inverse);
+    line-height: 1.2;
+}
+
+.header__user-email {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.55);
+    line-height: 1.2;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .header__top-bar {
+        padding: 0 var(--space-m);
+    }
+
+    .header__user-info {
+        display: none;
+    }
+
+    .header__btn span {
+        display: none;
+    }
+
+    .header__title-accent {
+        display: none;
+    }
+}

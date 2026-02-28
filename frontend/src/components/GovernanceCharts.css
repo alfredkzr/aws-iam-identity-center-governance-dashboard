@@ -1,0 +1,286 @@
+/* ================================================================
+   GovernanceCharts — Grid & Panel Styles
+   ================================================================ */
+
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: var(--space-l);
+}
+
+@keyframes fadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chart-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-l);
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fadeUp 400ms ease both;
+    transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+.chart-panel:hover {
+    box-shadow: 0 1px 1px 0 rgba(0, 28, 36, 0.06), 0 4px 12px -2px rgba(0, 28, 36, 0.12);
+    transform: translateY(-2px);
+}
+
+.chart-panel:nth-child(1) {
+    animation-delay: 100ms;
+}
+
+.chart-panel:nth-child(2) {
+    animation-delay: 180ms;
+}
+
+.chart-panel:nth-child(3) {
+    animation-delay: 260ms;
+}
+
+/* Wide panel — spans both grid columns (bottom row) */
+.chart-panel--wide {
+    grid-column: 1 / -1;
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-l);
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fadeUp 400ms ease both;
+    animation-delay: 260ms;
+    transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+.chart-panel--wide:hover {
+    box-shadow: 0 1px 1px 0 rgba(0, 28, 36, 0.06), 0 4px 12px -2px rgba(0, 28, 36, 0.12);
+    transform: translateY(-2px);
+}
+
+.chart-panel__header {
+    padding: var(--space-l) var(--space-xl);
+    border-bottom: 1px solid var(--border-divider);
+}
+
+.chart-panel__title {
+    font-size: var(--font-lg);
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.chart-panel__subtitle {
+    font-size: var(--font-xs);
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.chart-panel__body {
+    padding: var(--space-xl);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* ================================================================
+   Horizontal Bar Chart
+   ================================================================ */
+
+.bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-m);
+}
+
+.bar-chart__row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-m);
+}
+
+.bar-chart__label {
+    width: 120px;
+    flex-shrink: 0;
+    font-size: var(--font-xs);
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bar-chart__track {
+    flex: 1;
+    height: 22px;
+    background: var(--bg-page);
+    border-radius: var(--radius-s);
+    overflow: hidden;
+}
+
+.bar-chart__fill {
+    height: 100%;
+    border-radius: var(--radius-s);
+    min-width: 4px;
+    transition: width 600ms cubic-bezier(0.23, 1, 0.32, 1);
+    animation: barGrow 600ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@keyframes barGrow {
+    from {
+        transform: scaleX(0);
+        transform-origin: left;
+    }
+
+    to {
+        transform: scaleX(1);
+        transform-origin: left;
+    }
+}
+
+.bar-chart__value {
+    width: 32px;
+    text-align: right;
+    font-size: var(--font-sm);
+    font-weight: 700;
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+
+
+/* ================================================================
+   Access Heatmap
+   ================================================================ */
+
+.heatmap-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-m);
+}
+
+.heatmap-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.heatmap {
+    border-collapse: separate;
+    border-spacing: 2px;
+    width: 100%;
+    table-layout: auto;
+}
+
+.heatmap__corner {
+    width: 140px;
+    min-width: 120px;
+}
+
+.heatmap__col-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 6px 4px 8px;
+    white-space: nowrap;
+    letter-spacing: -0.02em;
+}
+
+.heatmap__row-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 0 8px 0 0;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+
+.heatmap__cell {
+    width: 44px;
+    height: 36px;
+    min-width: 36px;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--border-divider);
+    cursor: default;
+    transition: transform 120ms ease, box-shadow 120ms ease;
+    position: relative;
+}
+
+.heatmap__cell--active:hover {
+    transform: scale(1.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    z-index: 2;
+}
+
+/* Legend */
+.heatmap-legend {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 3px;
+}
+
+.heatmap-legend__label {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    padding: 0 3px;
+}
+
+.heatmap-legend__swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    border: 1px solid var(--border-divider);
+}
+
+/* ================================================================
+   Responsive
+   ================================================================ */
+
+@media (max-width: 900px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-panel--wide {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .bar-chart__label {
+        width: 80px;
+        font-size: 11px;
+    }
+}
+
+/* ================================================================
+   Print — hide charts
+   ================================================================ */
+
+@media print {
+    .charts-grid {
+        display: none !important;
+    }
+}

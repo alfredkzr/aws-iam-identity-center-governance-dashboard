@@ -1,0 +1,68 @@
+# -------------------------------------------------------
+# REQUIRED — You MUST set these for your environment
+# -------------------------------------------------------
+
+# AWS region for all resources
+aws_region = "us-east-1"
+
+# Prefix for all resource names — must be globally unique (used in S3 bucket names)
+resource_prefix = "your-org-idc-gov"
+
+# ARN of your IAM Identity Center (SSO) instance
+# Find it: AWS Console → IAM Identity Center → Settings → ARN
+sso_instance_arn = "arn:aws:sso:::instance/ssoins-xxxxxxxx"
+
+# Identity Store ID associated with the SSO instance
+# Find it: AWS Console → IAM Identity Center → Settings → Identity source
+identity_store_id = "d-xxxxxxxxxx"
+
+# AWS Organization management account ID
+org_management_account_id = "123456789012"
+
+# -------------------------------------------------------
+# OPTIONAL — Security (defaults are safe for demo use)
+# -------------------------------------------------------
+
+# CORS origins for the API. Restrict to your Amplify domain in production.
+# allowed_origins = ["https://main.d1234abcde.amplifyapp.com"]
+
+# Lambda Function URL authorization. Use "AWS_IAM" for production (requires SigV4).
+# lambda_url_auth_type = "AWS_IAM"
+
+# Allow Terraform to destroy S3 buckets with objects. Only set to true for dev/demo.
+# force_destroy_buckets = true
+
+# -------------------------------------------------------
+# OPTIONAL — Tags & Naming
+# -------------------------------------------------------
+
+# project_name = "idc-governance"
+# environment  = "production"
+
+# -------------------------------------------------------
+# OPTIONAL — Cost & Performance Guardrails
+# -------------------------------------------------------
+
+# CloudWatch Logs retention in days (default: 7)
+# log_retention_days = 14
+
+# Max concurrent Lambda invocations (prevents runaway costs)
+# worker_reserved_concurrency      = 10
+# athena_proxy_reserved_concurrency = 5
+
+# -------------------------------------------------------
+# OPTIONAL — Amplify / GitHub Integration
+# -------------------------------------------------------
+
+# GitHub repository URL for Amplify auto-deploy
+# github_repository = "https://github.com/your-org/aws-iam-identity-center-governance-dashboard"
+
+# GitHub personal access token (keep this secret!)
+# github_oauth_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# -------------------------------------------------------
+# OPTIONAL — SSO OIDC (frontend authentication)
+# -------------------------------------------------------
+
+# sso_oidc_issuer_url = "https://identitycenter.amazonaws.com/ssoins-xxxxxxxx"
+# sso_oidc_client_id  = "your-oidc-client-id"
