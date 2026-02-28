@@ -4,7 +4,7 @@ An open-source, serverless governance dashboard that audits AWS IAM Identity Cen
 
 ## Screenshots
 
-![Dashboard](docs/screenshots/dashboard.jpg)
+![Dashboard](docs/screenshots/dashboard.png)
 
 ![Dashboard](docs/screenshots/dashboard-2.jpg)
 
