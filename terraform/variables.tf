@@ -82,6 +82,12 @@ variable "log_retention_days" {
   default     = 7
 }
 
+variable "crawler_schedule_interval" {
+  description = "How often EventBridge triggers the crawler Step Function (e.g. '6 hours', '1 day', '12 hours'). Uses EventBridge rate() syntax."
+  type        = string
+  default     = "6 hours"
+}
+
 variable "worker_reserved_concurrency" {
   description = "Maximum concurrent executions for the worker Lambda. Limits blast radius and cost."
   type        = number
