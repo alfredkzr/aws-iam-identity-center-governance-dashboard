@@ -314,32 +314,14 @@ def _get_available_dates():
         logger.error(f"Failed to fetch dates from S3: {exc}")
         return []
 
-def _cors_origin(event):
-    """Determine the CORS origin to return based on the request and allowed origins."""
-    if ALLOWED_ORIGIN == "*":
-        return "*"
-
-    allowed = [o.strip() for o in ALLOWED_ORIGIN.split(",")]
-    request_origin = (event.get("headers") or {}).get("origin", "")
-
-    if request_origin in allowed:
-        return request_origin
-
-    # Default to first allowed origin
-    return allowed[0] if allowed else "*"
-
-
 def _response(status_code, body, event=None):
-    """Build a Lambda Function URL response with CORS headers."""
-    origin = ALLOWED_ORIGIN if ALLOWED_ORIGIN == "*" else _cors_origin(event or {})
-
+    """Build a Lambda Function URL response with JSON body.
+    Note: CORS headers are handled automatically by the Lambda Function URL configuration.
+    """
     return {
         "statusCode": status_code,
         "headers": {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
         },
         "body": json.dumps(body, default=str),
     }

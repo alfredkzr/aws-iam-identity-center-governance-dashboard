@@ -140,12 +140,15 @@ resource "aws_iam_role_policy" "athena_proxy_lambda_policy" {
         Effect = "Allow"
         Action = [
           "glue:GetTable",
-          "glue:GetDatabase"
+          "glue:GetDatabase",
+          "glue:GetPartitions",
+          "glue:GetDatabases",
+          "glue:GetTables"
         ]
         Resource = [
           "arn:${data.aws_partition.current.partition}:glue:${var.aws_region}:${data.aws_caller_identity.current.account_id}:catalog",
-          "arn:${data.aws_partition.current.partition}:glue:${var.aws_region}:${data.aws_caller_identity.current.account_id}:database/${var.resource_prefix}_db",
-          "arn:${data.aws_partition.current.partition}:glue:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.resource_prefix}_db/*"
+          "arn:${data.aws_partition.current.partition}:glue:${var.aws_region}:${data.aws_caller_identity.current.account_id}:database/${replace(var.resource_prefix, "-", "_")}_db",
+          "arn:${data.aws_partition.current.partition}:glue:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${replace(var.resource_prefix, "-", "_")}_db/*"
         ]
       },
       {

@@ -98,6 +98,11 @@ resource "aws_glue_catalog_table" "assignments" {
     }
 
     columns {
+      name = "group_name"
+      type = "string"
+    }
+
+    columns {
       name = "created_date"
       type = "string"
     }
