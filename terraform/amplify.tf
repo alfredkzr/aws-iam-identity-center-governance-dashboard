@@ -6,8 +6,8 @@ resource "aws_amplify_app" "frontend" {
   name       = "${var.resource_prefix}-dashboard"
   repository = var.github_repository != "" ? var.github_repository : null
 
-  # Only set OAuth token if provided
-  oauth_token = var.github_oauth_token != "" ? var.github_oauth_token : null
+  # Only set Access Token if provided (required for GitHub PATs)
+  access_token = var.github_oauth_token != "" ? var.github_oauth_token : null
 
   # Build specification
   build_spec = <<-YAML

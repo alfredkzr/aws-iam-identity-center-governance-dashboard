@@ -58,7 +58,7 @@ variable "force_destroy_buckets" {
 variable "allowed_origins" {
   description = "List of allowed CORS origins for the Lambda Function URL. Restrict this to your Amplify domain in production."
   type        = list(string)
-  default     = []
+  default     = ["*"]
 }
 
 variable "lambda_url_auth_type" {
