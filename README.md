@@ -119,6 +119,7 @@ After deployment, trigger the Step Functions state machine to perform the first 
 
 ```bash
 aws stepfunctions start-execution \
+  --region $(terraform -chdir=terraform output -raw aws_region) \
   --state-machine-arn $(terraform -chdir=terraform output -raw step_functions_arn)
 ```
 
@@ -224,7 +225,7 @@ github_oauth_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `allowed_origins` | `list(string)` | `["*"]` | CORS origins for the API. Restrict to your Amplify domain in production. |
+| `allowed_origins` | `list(string)` | `["*"]` | CORS origins for the API. Leave as default for initial deploy, update with Amplify domain for production. |
 | `lambda_url_auth_type` | `string` | `"NONE"` | `NONE` for demo, `AWS_IAM` for production |
 | `force_destroy_buckets` | `bool` | `false` | Allow `terraform destroy` to delete non-empty buckets |
 
@@ -278,7 +279,7 @@ github_oauth_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ### Network / API Security
 - Lambda Function URL defaults to `authorization_type = "NONE"` for quick demo setup
 - **For production**: Set `lambda_url_auth_type = "AWS_IAM"` and configure SigV4 signed requests from the frontend
-- **For production**: Set `allowed_origins` to your specific Amplify domain to restrict CORS
+- **For production**: After initial deployment, set `allowed_origins` to your generated Amplify domain and re-apply to restrict CORS
 
 ### Input Validation
 - Athena table name validated against `^[a-zA-Z_][a-zA-Z0-9_]*$` regex at Lambda cold-start

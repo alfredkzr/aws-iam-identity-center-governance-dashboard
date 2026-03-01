@@ -30,8 +30,6 @@ resource "aws_lambda_function" "worker" {
   memory_size      = 256
   role             = aws_iam_role.worker_lambda.arn
 
-  reserved_concurrent_executions = var.worker_reserved_concurrency
-
   environment {
     variables = {
       SSO_INSTANCE_ARN  = var.sso_instance_arn
@@ -61,8 +59,6 @@ resource "aws_lambda_function" "athena_proxy" {
   timeout          = 60
   memory_size      = 256
   role             = aws_iam_role.athena_proxy_lambda.arn
-
-  reserved_concurrent_executions = var.athena_proxy_reserved_concurrency
 
   environment {
     variables = {

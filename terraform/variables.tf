@@ -56,15 +56,15 @@ variable "force_destroy_buckets" {
 }
 
 variable "allowed_origins" {
-  description = "List of allowed CORS origins for the Lambda Function URL. Set to your Amplify domain in production (e.g. ['https://main.d1234abcde.amplifyapp.com'])."
+  description = "List of allowed CORS origins for the Lambda Function URL. Restrict this to your Amplify domain in production."
   type        = list(string)
-  default     = ["*"]
+  default     = []
 }
 
 variable "lambda_url_auth_type" {
-  description = "Authorization type for the Athena Proxy Lambda Function URL. Use 'NONE' for demo or 'AWS_IAM' for production (requires SigV4 signed requests from frontend)."
+  description = "Authorization type for the Athena Proxy Lambda Function URL. Use 'AWS_IAM' for production (requires SigV4 signed requests from frontend)."
   type        = string
-  default     = "NONE"
+  default     = "AWS_IAM"
 
   validation {
     condition     = contains(["NONE", "AWS_IAM"], var.lambda_url_auth_type)

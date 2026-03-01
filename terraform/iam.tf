@@ -41,7 +41,7 @@ resource "aws_iam_role_policy" "worker_lambda_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+        Resource = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.resource_prefix}-worker:*"
       },
       {
         Sid    = "SSOAdminRead"
@@ -122,7 +122,7 @@ resource "aws_iam_role_policy" "athena_proxy_lambda_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+        Resource = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.resource_prefix}-athena-proxy:*"
       },
       {
         Sid    = "AthenaAccess"
@@ -222,7 +222,10 @@ resource "aws_iam_role_policy" "step_functions_policy" {
           "logs:DescribeResourcePolicies",
           "logs:DescribeLogGroups"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vendedlogs/states/${var.resource_prefix}-crawler:*",
+          "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.resource_prefix}-worker:*"
+        ]
       },
       {
         Sid    = "OrganizationsRead"
@@ -231,6 +234,20 @@ resource "aws_iam_role_policy" "step_functions_policy" {
           "organizations:ListAccounts"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "StatesExecution"
+        Effect = "Allow"
+        Action = [
+          "states:StartExecution",
+          "states:DescribeExecution",
+          "states:StopExecution"
+        ]
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:${var.resource_prefix}-crawler",
+          "arn:${data.aws_partition.current.partition}:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stateMachine:${var.resource_prefix}-crawler/*",
+          "arn:${data.aws_partition.current.partition}:states:${var.aws_region}:${data.aws_caller_identity.current.account_id}:execution:${var.resource_prefix}-crawler:*"
+        ]
       }
     ]
   })

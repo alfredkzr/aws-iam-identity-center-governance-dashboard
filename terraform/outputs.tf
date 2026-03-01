@@ -51,3 +51,8 @@ output "amplify_default_domain" {
   description = "Amplify default domain URL"
   value       = aws_amplify_app.frontend.default_domain
 }
+
+output "aws_region" {
+  description = "AWS region deployed to"
+  value       = var.aws_region
+}

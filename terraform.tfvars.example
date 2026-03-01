@@ -21,7 +21,9 @@ identity_store_id = "d-xxxxxxxxxx"
 # OPTIONAL — Security (defaults are safe for demo use)
 # -------------------------------------------------------
 
-# CORS origins for the API. Restrict to your Amplify domain in production.
+# CORS origins for the API. Leave commented out for the initial deployment.
+# After deploying, you will get the Amplify domain from the Terraform outputs.
+# For production, uncomment and update this with your Amplify domain, then run terraform apply again.
 # allowed_origins = ["https://main.d1234abcde.amplifyapp.com"]
 
 # Lambda Function URL authorization. Use "AWS_IAM" for production (requires SigV4).

@@ -12,31 +12,30 @@ resource "aws_amplify_app" "frontend" {
   # Build specification
   build_spec = <<-YAML
     version: 1
-    frontend:
-      phases:
-        preBuild:
-          commands:
-            - cd frontend
-            - npm ci
-        build:
-          commands:
-            - npm run build
-      artifacts:
-        baseDirectory: frontend/build
-        files:
-          - '**/*'
-      cache:
-        paths:
-          - frontend/node_modules/**/*
+    applications:
+      - appRoot: frontend
+        frontend:
+          phases:
+            preBuild:
+              commands:
+                - npm ci
+            build:
+              commands:
+                - npm run build
+          artifacts:
+            baseDirectory: build
+            files:
+              - '**/*'
+          cache:
+            paths:
+              - node_modules/**/*
   YAML
 
-  # Environment variables for the frontend
   environment_variables = {
-    REACT_APP_API_ENDPOINT      = aws_lambda_function_url.athena_proxy.function_url
-    REACT_APP_OKTA_DOMAIN       = var.okta_domain
-    REACT_APP_OKTA_CLIENT_ID    = var.okta_client_id
-    REACT_APP_OKTA_REDIRECT_URI = "https://main.${aws_amplify_app.frontend.default_domain}/callback"
-    REACT_APP_AWS_REGION        = var.aws_region
+    REACT_APP_API_ENDPOINT   = aws_lambda_function_url.athena_proxy.function_url
+    REACT_APP_OKTA_DOMAIN    = var.okta_domain
+    REACT_APP_OKTA_CLIENT_ID = var.okta_client_id
+    REACT_APP_AWS_REGION     = var.aws_region
   }
 
   # Auto branch creation for main
