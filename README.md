@@ -100,17 +100,28 @@ Terraform will output the `athena_proxy_url` and `amplify_default_domain` — yo
 
 If you set `github_repository` and `github_oauth_token` in your tfvars, Amplify will automatically build and deploy on every push to `main`. See [GitHub Token Setup](#github-token-setup) below.
 
-**Option B: Manual Deploy**
+#### Option B: Manual Deploy
 
 If you didn't connect GitHub, deploy manually via the Amplify console:
 
 ```bash
 cd frontend
 npm install
+
+# Set environment variables (get from Terraform outputs)
 export REACT_APP_API_ENDPOINT=$(terraform -chdir=../terraform output -raw athena_proxy_url)
+export REACT_APP_AWS_REGION=$(terraform -chdir=../terraform output -raw aws_region)
+
+# Build and package
 npm run build
-# Then upload the build/ folder via the Amplify Console → Deploy without Git provider
+cd build
+zip -r ../deploy.zip .
 cd ..
+
+# Then upload the deploy.zip file via the Amplify Console:
+# 1. Select your app -> "Deployments"
+# 2. Choose "Deploy without a Git provider"
+# 3. Drag and drop deploy.zip
 ```
 
 ### 5. Run the Initial Crawl
@@ -119,8 +130,8 @@ After deployment, trigger the Step Functions state machine to perform the first 
 
 ```bash
 aws stepfunctions start-execution \
-  --region $(terraform -chdir=terraform output -raw aws_region) \
-  --state-machine-arn $(terraform -chdir=terraform output -raw step_functions_arn)
+  --region $(terraform -chdir=../terraform output -raw aws_region) \
+  --state-machine-arn $(terraform -chdir=../terraform output -raw step_functions_arn)
 ```
 
 The dashboard will populate with data once the crawl completes (typically 1–3 minutes).
@@ -241,7 +252,7 @@ github_oauth_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `aws_region` | `string` | `us-east-1` | AWS deployment region |
+| `aws_region` | `string` | `ap-southeast-1` | AWS deployment region |
 | `project_name` | `string` | `idc-governance` | Tag value for resource identification |
 | `environment` | `string` | `production` | Tag value for environment |
 | `github_repository` | `string` | `""` | GitHub repo URL for Amplify auto-deploy |

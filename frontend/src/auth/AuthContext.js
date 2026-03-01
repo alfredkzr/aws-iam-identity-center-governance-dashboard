@@ -6,8 +6,13 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 
 const OKTA_DOMAIN = process.env.REACT_APP_OKTA_DOMAIN || '';
 const OKTA_CLIENT_ID = process.env.REACT_APP_OKTA_CLIENT_ID || '';
-const REDIRECT_URI = process.env.REACT_APP_OKTA_REDIRECT_URI || `${window.location.origin}/callback`;
+const REDIRECT_URI = (process.env.REACT_APP_OKTA_REDIRECT_URI && !process.env.REACT_APP_OKTA_REDIRECT_URI.includes('localhost'))
+    ? process.env.REACT_APP_OKTA_REDIRECT_URI
+    : `${window.location.origin}/callback`;
 const OKTA_ENABLED = Boolean(OKTA_DOMAIN && OKTA_CLIENT_ID);
+const AWS_REGION = process.env.REACT_APP_AWS_REGION || 'ap-southeast-1';
+const IDENTITY_POOL_ID = process.env.REACT_APP_IDENTITY_POOL_ID || '';
+
 
 // Local fallback credentials (when Okta is not configured)
 const LOCAL_USERS = [
@@ -103,13 +108,18 @@ export function AuthProvider({ children }) {
         const returnedState = params.get('state');
         const codeVerifier = sessionStorage.getItem('okta_code_verifier');
 
+        console.log('Handling Okta callback...', { code: !!code, verifier: !!codeVerifier, state: !!returnedState });
+
         if (!code || !codeVerifier) {
-            setError('Missing authorization code or verifier');
+            const msg = !code ? 'Missing authorization code' : 'Missing verifier (session may have expired)';
+            console.error('Okta callback error:', msg);
+            setError(msg);
             setLoading(false);
             return false;
         }
 
         if (storedState && storedState !== returnedState) {
+            console.error('Okta callback error: State mismatch', { stored: storedState, returned: returnedState });
             setError('State mismatch — possible CSRF attack');
             setLoading(false);
             return false;
@@ -148,6 +158,23 @@ export function AuthProvider({ children }) {
             sessionStorage.removeItem('okta_state');
             sessionStorage.removeItem('okta_code_verifier');
 
+            console.log('Okta token exchange successful');
+
+            // Link Okta session to Amplify for AWS credentials
+            if (IDENTITY_POOL_ID) {
+                try {
+                    // Import federate dynamically to avoid build issues if it's missing in some versions
+                    const { federate } = await import('aws-amplify/auth');
+                    await federate({
+                        providerName: `integrator-2885862.okta.com/oauth2/default`,
+                        token: tokens.id_token
+                    });
+                    console.log('Federation to AWS successful');
+                } catch (credErr) {
+                    console.error('Failed to federate tokens to AWS:', credErr);
+                }
+            }
+
             setUser(userData);
             setLoading(false);
 
@@ -156,7 +183,7 @@ export function AuthProvider({ children }) {
             return true;
         } catch (err) {
             console.error('Okta token exchange failed:', err);
-            setError(err.message);
+            setError(`Authentication failed: ${err.message}`);
             setLoading(false);
             return false;
         }
@@ -179,6 +206,13 @@ export function AuthProvider({ children }) {
         authUrl.searchParams.set('state', state);
         authUrl.searchParams.set('code_challenge', codeChallenge);
         authUrl.searchParams.set('code_challenge_method', 'S256');
+
+        console.log('Starting Okta login...', {
+            domain: OKTA_DOMAIN,
+            clientId: OKTA_CLIENT_ID,
+            redirectUri: REDIRECT_URI,
+            authUrl: authUrl.toString()
+        });
 
         window.location.href = authUrl.toString();
     }, []);
