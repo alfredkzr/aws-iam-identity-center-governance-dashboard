@@ -42,14 +42,19 @@ output "athena_workgroup" {
   value       = aws_athena_workgroup.main.name
 }
 
-output "amplify_app_id" {
-  description = "Amplify App ID"
-  value       = aws_amplify_app.frontend.id
+output "frontend_url" {
+  description = "CloudFront URL for the dashboard (HTTPS)"
+  value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"
 }
 
-output "amplify_default_domain" {
-  description = "Amplify default domain URL"
-  value       = aws_amplify_app.frontend.default_domain
+output "frontend_bucket" {
+  description = "S3 bucket for the frontend static files"
+  value       = aws_s3_bucket.frontend.id
+}
+
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID (for cache invalidation)"
+  value       = aws_cloudfront_distribution.frontend.id
 }
 
 output "aws_region" {

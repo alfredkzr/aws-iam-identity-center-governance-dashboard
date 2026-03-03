@@ -23,7 +23,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "inventory_lifecycle" {
   bucket = aws_s3_bucket.inventory.id
 
   rule {
-    id     = "expire-after-24h"
+    id     = "lifecycle-days"
     status = "Enabled"
 
     filter {}
@@ -64,7 +64,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "athena_results_lifecycle" {
   bucket = aws_s3_bucket.athena_results.id
 
   rule {
-    id     = "expire-after-24h"
+    id     = "lifecycle-days"
     status = "Enabled"
 
     filter {}
@@ -105,7 +105,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "cache_lifecycle" {
   bucket = aws_s3_bucket.cache.id
 
   rule {
-    id     = "expire-after-24h"
+    id     = "lifecycle-days"
     status = "Enabled"
 
     filter {}

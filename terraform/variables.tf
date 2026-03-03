@@ -119,23 +119,6 @@ variable "athena_proxy_reserved_concurrency" {
 }
 
 # -----------------------------------------------------------------------------
-# Amplify / GitHub Integration
-# -----------------------------------------------------------------------------
-
-variable "github_repository" {
-  description = "GitHub repository URL for Amplify source (e.g. https://github.com/org/repo)"
-  type        = string
-  default     = ""
-}
-
-variable "github_oauth_token" {
-  description = "GitHub personal access token for Amplify to access the repository"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-# -----------------------------------------------------------------------------
 # Okta SSO Configuration (for frontend auth)
 # -----------------------------------------------------------------------------
 

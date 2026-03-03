@@ -22,9 +22,9 @@ identity_store_id = "d-xxxxxxxxxx"
 # -------------------------------------------------------
 
 # CORS origins for the API. Leave commented out for the initial deployment.
-# After deploying, you will get the Amplify domain from the Terraform outputs.
-# For production, uncomment and update this with your Amplify domain, then run terraform apply again.
-# allowed_origins = ["https://main.d1234abcde.amplifyapp.com"]
+# After deploying, you will get the CloudFront domain from the Terraform outputs.
+# For production, uncomment and update this with your CloudFront domain, then run terraform apply again.
+# allowed_origins = ["https://d1234abcde.cloudfront.net"]
 
 # Lambda Function URL authorization. Use "AWS_IAM" for production (requires SigV4).
 # lambda_url_auth_type = "AWS_IAM"
@@ -56,19 +56,9 @@ identity_store_id = "d-xxxxxxxxxx"
 # athena_proxy_reserved_concurrency = 5
 
 # -------------------------------------------------------
-# OPTIONAL — Amplify / GitHub Integration
-# -------------------------------------------------------
-
-# GitHub repository URL for Amplify auto-deploy
-# github_repository = "https://github.com/your-org/aws-iam-identity-center-governance-dashboard"
-
-# GitHub personal access token (keep this secret!)
-# github_oauth_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-# -------------------------------------------------------
 # OPTIONAL — Okta SSO (frontend authentication)
 # -------------------------------------------------------
 
 # okta_domain       = "your-org.okta.com"
 # okta_client_id    = "0oaXXXXXXXXXXXXXXXX"
-# Note: okta_redirect_uri is auto-derived from the Amplify domain — no need to set it.
+# Note: okta_redirect_uri is auto-derived from the CloudFront domain — no need to set it.

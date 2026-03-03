@@ -3,7 +3,8 @@
 # -----------------------------------------------------------------------------
 
 resource "aws_athena_workgroup" "main" {
-  name = "${var.resource_prefix}-workgroup"
+  name          = "${var.resource_prefix}-workgroup"
+  force_destroy = true
 
   configuration {
     enforce_workgroup_configuration = true

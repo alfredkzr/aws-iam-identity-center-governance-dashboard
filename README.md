@@ -6,9 +6,9 @@ An open-source, serverless governance dashboard that audits AWS IAM Identity Cen
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Amplify    │────▶│  Athena Proxy    │────▶│     Athena      │
-│  (React UI) │     │    (Lambda)      │     │   (SQL Query)   │
-│  SSO Auth   │     │  + Fast Cache    │     │                 │
+│ CloudFront  │────▶│  Athena Proxy    │────▶│     Athena      │
+│  + S3       │     │    (Lambda)      │     │   (SQL Query)   │
+│ (React UI)  │     │  + Fast Cache    │     │                 │
 └─────────────┘     └──────────────────┘     └────────┬────────┘
                                                       │
                                                       ▼
@@ -52,7 +52,7 @@ The IAM principal running `terraform apply` needs permissions for:
 - IAM (create roles and policies)
 - Step Functions (create state machines)
 - Athena & Glue (create workgroups, databases, tables)
-- Amplify (create apps)
+- CloudFront (create distributions)
 - CloudWatch Logs (create log groups)
 
 ## Quick Start
@@ -78,7 +78,7 @@ Edit `terraform/terraform.tfvars` with your values. At minimum, set:
 | `sso_instance_arn` | ARN of your IAM Identity Center instance | `arn:aws:sso:::instance/ssoins-xxxxxxxx` |
 | `identity_store_id` | Identity Store ID | `d-xxxxxxxxxx` |
 
-### 3. Deploy Infrastructure
+### 3. Deploy Infrastructure + Frontend
 
 ```bash
 cd terraform
@@ -88,46 +88,23 @@ terraform apply
 cd ..
 ```
 
-Terraform will output the `athena_proxy_url` and `amplify_default_domain` — you'll need these for the next steps.
+Terraform will automatically:
+1. Create all AWS infrastructure (S3, Lambda, Athena, CloudFront, etc.)
+2. Build the React frontend with the correct environment variables
+3. Upload the build to S3 and invalidate the CloudFront cache
 
-### 4. Deploy Frontend
+The `frontend_url` output will show your dashboard URL (e.g., `https://d1234abcde.cloudfront.net`).
 
-**Option A: GitHub Auto-Deploy (Recommended)**
+> **Note:** The first CloudFront deployment takes ~5 minutes to propagate globally.
 
-If you set `github_repository` and `github_oauth_token` in your tfvars, Amplify will automatically build and deploy on every push to `main`. See [GitHub Token Setup](#github-token-setup) below.
-
-#### Option B: Manual Deploy
-
-If you didn't connect GitHub, deploy manually via the Amplify console:
-
-```bash
-cd frontend
-npm install
-
-# Set environment variables (get from Terraform outputs)
-export REACT_APP_API_ENDPOINT=$(terraform -chdir=../terraform output -raw athena_proxy_url)
-export REACT_APP_AWS_REGION=$(terraform -chdir=../terraform output -raw aws_region)
-
-# Build and package
-npm run build
-cd build
-zip -r ../deploy.zip .
-cd ..
-
-# Then upload the deploy.zip file via the Amplify Console:
-# 1. Select your app -> "Deployments"
-# 2. Choose "Deploy without a Git provider"
-# 3. Drag and drop deploy.zip
-```
-
-### 5. Run the Initial Crawl
+### 4. Run the Initial Crawl
 
 After deployment, trigger the Step Functions state machine to perform the first crawl:
 
 ```bash
 aws stepfunctions start-execution \
-  --region $(terraform -chdir=../terraform output -raw aws_region) \
-  --state-machine-arn $(terraform -chdir=../terraform output -raw step_functions_arn)
+  --region $(terraform -chdir=terraform output -raw aws_region) \
+  --state-machine-arn $(terraform -chdir=terraform output -raw step_functions_arn)
 ```
 
 The dashboard will populate with data once the crawl completes (typically 1–3 minutes).
@@ -152,9 +129,9 @@ The dashboard supports Okta OIDC single sign-on. When Okta is not configured, it
 | **App integration name** | `IAM Governance Dashboard` (or any name) |
 | **Grant type** | ✅ Authorization Code |
 | **Sign-in redirect URIs** | `http://localhost:3000/callback` (dev) |
-| | `https://your-amplify-domain.amplifyapp.com/callback` (prod) |
+| | `https://your-cloudfront-domain.cloudfront.net/callback` (prod) |
 | **Sign-out redirect URIs** | `http://localhost:3000` (dev) |
-| | `https://your-amplify-domain.amplifyapp.com` (prod) |
+| | `https://your-cloudfront-domain.cloudfront.net` (prod) |
 | **Controlled access** | Choose who can access (e.g., "Allow everyone in your organization") |
 
 5. Click **Save**
@@ -184,7 +161,7 @@ The login page will automatically show a **"Sign in with Okta"** button instead 
 
 ### Production Deployment
 
-For Amplify-hosted deployments, set the Okta variables in your `terraform.tfvars` — Terraform will pass them to Amplify as environment variables automatically:
+Set the Okta variables in your `terraform.tfvars` — Terraform will inject them as build-time environment variables when deploying the frontend:
 
 ```hcl
 # In terraform/terraform.tfvars
@@ -192,31 +169,11 @@ okta_domain    = "your-org.okta.com"
 okta_client_id = "0oaXXXXXXXXXXXXXXXXX"
 ```
 
-The redirect URI is **auto-derived** from the Amplify domain (`https://main.<amplify-domain>/callback`), so you don't need to set it.
+The redirect URI is **auto-derived** from the current origin, so you don't need to set it manually.
 
-After deploying, add the production callback URL (`https://main.<your-amplify-domain>.amplifyapp.com/callback`) to your Okta app's **Sign-in redirect URIs**.
+After deploying, add the production callback URL (`https://<your-cloudfront-domain>.cloudfront.net/callback`) to your Okta app's **Sign-in redirect URIs**.
 
-## GitHub Token Setup
 
-If you want Amplify to auto-deploy from GitHub, you need a **GitHub Personal Access Token (classic)**:
-
-1. Go to [GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)](https://github.com/settings/tokens)
-2. Click **Generate new token (classic)**
-3. Set a descriptive **Note** (e.g., `amplify-idc-dashboard`)
-4. Set **Expiration** as needed
-5. Select these scopes:
-   - ✅ `repo` (Full control of private repositories)
-   - ✅ `admin:repo_hook` (manage webhooks — needed for auto-deploy triggers)
-6. Click **Generate token** and copy the value immediately (you won't see it again)
-7. Add it to your tfvars:
-
-```hcl
-# In terraform/terraform.tfvars
-github_repository  = "https://github.com/your-org/aws-iam-identity-center-governance-dashboard"
-github_oauth_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-```
-
-> **Note:** With this setup, Terraform handles the full Amplify ↔ GitHub connection. You do **not** need to manually connect GitHub in the Amplify Console — Terraform does it for you via the OAuth token.
 
 ## Configuration Reference
 
@@ -232,7 +189,7 @@ github_oauth_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `allowed_origins` | `list(string)` | `["*"]` | CORS origins for the API. Leave as default for initial deploy, update with Amplify domain for production. |
+| `allowed_origins` | `list(string)` | `["*"]` | CORS origins for the API. Leave as default for initial deploy, update with CloudFront domain for production. |
 | `lambda_url_auth_type` | `string` | `"NONE"` | `NONE` for demo, `AWS_IAM` for production |
 | `force_destroy_buckets` | `bool` | `false` | Allow `terraform destroy` to delete non-empty buckets |
 
@@ -251,28 +208,27 @@ github_oauth_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 | `aws_region` | `string` | `ap-southeast-1` | AWS deployment region |
 | `project_name` | `string` | `idc-governance` | Tag value for resource identification |
 | `environment` | `string` | `production` | Tag value for environment |
-| `github_repository` | `string` | `""` | GitHub repo URL for Amplify auto-deploy |
-| `github_oauth_token` | `string` | `""` | GitHub PAT for Amplify ([setup guide](#github-token-setup)) |
+
 | `okta_domain` | `string` | `""` | Okta domain for SSO (e.g., `your-org.okta.com`) |
 | `okta_client_id` | `string` | `""` | Okta OIDC application client ID |
 
 ## Project Structure
 
 ```
-├── terraform/          # All infrastructure as code
-│   ├── main.tf         # Provider configuration
-│   ├── variables.tf    # All configurable variables
-│   ├── s3.tf           # S3 buckets (encrypted, lifecycle policies)
-│   ├── lambda.tf       # Lambda functions (worker + athena proxy)
-│   ├── iam.tf          # IAM roles and policies (least privilege)
-│   ├── athena.tf       # Athena workgroup, Glue catalog
-│   ├── stepfunctions.tf# Step Functions state machine
-│   ├── amplify.tf      # Amplify frontend hosting
-│   └── outputs.tf      # Terraform outputs
+├── terraform/              # All infrastructure as code
+│   ├── main.tf             # Provider configuration
+│   ├── variables.tf        # All configurable variables
+│   ├── s3.tf               # S3 buckets (encrypted, lifecycle policies)
+│   ├── frontend_hosting.tf # S3 + CloudFront (auto-build & deploy)
+│   ├── lambda.tf           # Lambda functions (worker + athena proxy)
+│   ├── iam.tf              # IAM roles and policies (least privilege)
+│   ├── athena.tf           # Athena workgroup, Glue catalog
+│   ├── stepfunctions.tf    # Step Functions state machine
+│   └── outputs.tf          # Terraform outputs
 ├── backend/
-│   ├── worker/         # Account assignment crawler Lambda
-│   └── athena_proxy/   # Query lifecycle + cache Lambda
-├── frontend/           # React dashboard with Amplify Auth
+│   ├── worker/             # Account assignment crawler Lambda
+│   └── athena_proxy/       # Query lifecycle + cache Lambda
+├── frontend/               # React dashboard (Okta SSO auth)
 └── terraform.tfvars.example  # Template for your configuration
 ```
 
@@ -286,7 +242,7 @@ github_oauth_token = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ### Network / API Security
 - Lambda Function URL defaults to `authorization_type = "NONE"` for quick demo setup
 - **For production**: Set `lambda_url_auth_type = "AWS_IAM"` and configure SigV4 signed requests from the frontend
-- **For production**: After initial deployment, set `allowed_origins` to your generated Amplify domain and re-apply to restrict CORS
+- **For production**: After initial deployment, set `allowed_origins` to your CloudFront domain and re-apply to restrict CORS
 
 ### Input Validation
 - Athena table name validated against `^[a-zA-Z_][a-zA-Z0-9_]*$` regex at Lambda cold-start
