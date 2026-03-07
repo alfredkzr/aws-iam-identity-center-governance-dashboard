@@ -30,7 +30,7 @@
 
 ## Overview
 
-The **AWS IAM Identity Center Governance Dashboard** gives security teams and auditors a single-pane view of _who has access to what_ across every account in an AWS Organization. It crawls IAM Identity Center assignments daily, stores structured snapshots in S3, and surfaces them through an interactive React UI — all without managing servers.
+The **AWS IAM Identity Center Governance Dashboard** gives security teams and auditors a single-pane view of _who has access to what_ across every account in an AWS Organization. It crawls IAM Identity Center assignments on a configurable schedule (every 6 hours by default), stores structured snapshots in S3, and surfaces them through an interactive React UI — all without managing servers.
 
 **Built for teams who need:**
 - Continuous visibility into SSO permission sprawl
@@ -56,7 +56,7 @@ flowchart TD
     end
 
     subgraph pipeline ["Ingestion & Crawl Pipeline"]
-        EB["⏱️ EventBridge\nDaily Schedule"]
+        EB["⏱️ EventBridge\nScheduled Trigger"]
         SFN["🔀 Step Functions\nDistributed Map"]
         Workers["⚡ Worker Lambdas\n(1 per Account)"]
     end
@@ -78,7 +78,7 @@ flowchart TD
     Workers --> IDC
 ```
 
-> **Data flow:** EventBridge triggers Step Functions daily → Worker Lambdas crawl each AWS account in parallel → results are written to S3 → Athena queries the data → the React UI displays assignments via the Athena Proxy Lambda.
+> **Data flow:** EventBridge triggers Step Functions on a schedule (every 6h by default) → Worker Lambdas crawl each AWS account in parallel → results are written to S3 → Athena queries the data → the React UI displays assignments via the Athena Proxy Lambda.
 
 ---
 
@@ -91,8 +91,8 @@ flowchart TD
 | 👤 **User & Group Resolution** | Resolves GUIDs to friendly names, emails, and expanded group memberships |
 | 🚀 **Fast-Load Cache** | Athena Proxy serves pre-rendered `summary.json` from S3 before falling back to SQL |
 | 🔐 **SSO-Secured Frontend** | React dashboard protected by Okta OIDC — falls back to local auth for development |
-| 💰 **Cost-Optimized** | No Glue Crawlers, 24-hour lifecycle policies, fully serverless |
-| 🛡️ **Security Hardened** | AES-256 encryption at rest, configurable CORS, input validation, concurrency guardrails |
+| 💰 **Cost-Optimized** | No Glue Crawlers, auto-expiry lifecycle policies, fully serverless |
+| 🛡️ **Security Hardened** | AES-256 encryption at rest, CloudFront OAC, input validation, IAM least-privilege |
 
 ---
 
@@ -178,20 +178,20 @@ Trigger the Step Functions state machine to populate the dashboard with your fir
 
 ```bash
 aws stepfunctions start-execution \
-  --region $(terraform -chdir=terraform output -raw aws_region) \
-  --state-machine-arn $(terraform -chdir=terraform output -raw step_functions_arn)
+  --region $(terraform output -raw aws_region) \
+  --state-machine-arn $(terraform output -raw step_functions_arn)
 ```
 
-The dashboard will populate within **1–3 minutes** once the crawl completes. Subsequent crawls run automatically on the daily EventBridge schedule.
+The dashboard will populate within **1–3 minutes** once the crawl completes. Subsequent crawls run automatically on the configured EventBridge schedule (every 6 hours by default).
 
 ---
+
+## Okta SSO Setup
 
 ### 1. Create an Okta Application
 
 > [!IMPORTANT]
 > **Authentication Fallback:** If Okta is not configured, the dashboard defaults to **Local Auth Mode** for demonstration purposes. This uses hardcoded credentials (`admin` / `admin123`) in `AuthContext.js`. While useful for a quick PoC, **always remove these fallback credentials or configure Okta before exposing the dashboard to the public internet.**
-
-1. Log into your [Okta Admin Console](https://your-org-admin.okta.com/admin/apps/active)
 
 1. Log into your [Okta Admin Console](https://your-org-admin.okta.com/admin/apps/active)
 2. Go to **Applications → Create App Integration**
@@ -248,8 +248,6 @@ After deploying, remember to add the production callback URL to your Okta app's 
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `allowed_origins` | `list(string)` | `["*"]` | CORS origins for the API. Update to your CloudFront domain after initial deploy. |
-| `lambda_url_auth_type` | `string` | `"NONE"` | `NONE` for demo; `AWS_IAM` for production |
 | `force_destroy_buckets` | `bool` | `false` | Allow `terraform destroy` to delete non-empty buckets |
 
 ### Cost & Performance Variables
@@ -264,7 +262,7 @@ After deploying, remember to add the production callback URL to your Okta app's 
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `aws_region` | `string` | `ap-southeast-1` | AWS deployment region |
+| `aws_region` | `string` | `us-east-1` | AWS deployment region |
 | `project_name` | `string` | `idc-governance` | Tag applied to all resources |
 | `environment` | `string` | `production` | Environment tag |
 | `okta_domain` | `string` | `""` | Okta domain (e.g. `your-org.okta.com`) |
@@ -286,7 +284,7 @@ aws-iam-identity-center-governance-dashboard/
 │   ├── iam.tf                     # IAM roles & policies (least privilege)
 │   ├── athena.tf                  # Athena workgroup & Glue catalog
 │   ├── stepfunctions.tf           # Step Functions state machine
-│   └── eventbridge.tf             # EventBridge daily schedule rule
+│   └── eventbridge.tf             # EventBridge scheduled trigger rule
 ├── backend/
 │   ├── worker/                    # Account assignment crawler Lambda (Python)
 │   └── athena_proxy/              # Query lifecycle + cache Lambda (Python)
@@ -298,120 +296,36 @@ aws-iam-identity-center-governance-dashboard/
 
 ## Security
 
-### Data at Rest
-- All S3 buckets use **AES-256 server-side encryption** (SSE-S3)
-- Inventory data auto-expires after **7 days**; Athena results after **1 day**
-- All buckets block public access by default
+The default deployment is already hardened out of the box — S3 buckets are encrypted (AES-256) with public access blocked, IAM policies follow least privilege, the Lambda API requires `AWS_IAM` auth via CloudFront OAC, and all data has auto-expiry lifecycle rules.
 
-### API Security
-- Lambda Function URL defaults to `authorization_type = "NONE"` for quick demo setup
-- **For production:** Set `lambda_url_auth_type = "AWS_IAM"` to require SigV4 signed requests
-- **For production:** Restrict `allowed_origins` to your CloudFront domain after initial deploy
+The items below are **post-deployment hardening steps** to consider when moving beyond a PoC:
 
-### Input Validation
-- Athena table name validated against `^[a-zA-Z_][a-zA-Z0-9_]*$` at cold-start
-- Query type validated against allowlist (`all`, `summary`)
-- Error responses never leak internal exception details
+### Recommended Hardening
 
-### IAM Least Privilege
-
-| Component | Permissions |
-|-----------|-------------|
-| Worker Lambda | Read-only: SSO, Identity Store, Organizations; Write-only: inventory S3 bucket |
-| Athena Proxy Lambda | Athena query execution; Read/write S3; Read-only Glue catalog |
-| Step Functions | Invoke worker Lambda only |
-
-### Security Considerations for Public Repos
-
-If you plan to fork or make this repository public, please address the following:
-
-- **Disable Local Demo Auth:** Remove the `LOCAL_USERS` array and `loginLocal` logic in `frontend/src/auth/AuthContext.js`.
-- **Implement a WAF:** For production use cases, it is highly recommended to attach an **AWS WAFv2 Web ACL** to the CloudFront distribution to protect against volumetric attacks and common web exploits. This is omitted by default to keep PoC costs at near-zero levels.
-- **Rotate Secrets:** Ensure no sensitive organization IDs or ARNs are committed to your public repository. Use the `terraform.tfvars` file (which is git-ignored) to manage environment-specific values.
+| Action | Why | How |
+|--------|-----|-----|
+| **Attach AWS WAFv2** | Protect CloudFront against DDoS, bots, and OWASP Top 10 exploits | Create a `aws_wafv2_web_acl` with AWS Managed Rules and associate it with the CloudFront distribution |
+| **Add a custom domain + TLS** | Replace the default `*.cloudfront.net` domain with your own branded, trusted domain | Create an ACM certificate in `us-east-1`, add a `viewer_certificate` block and Route 53 alias |
+| **Enable geo-restriction** | Limit dashboard access to your operating regions only | Set `restrictions.geo_restriction` in the CloudFront distribution to `whitelist` your countries |
+| **Disable local demo auth** | Remove hardcoded `admin/admin123` fallback credentials | Delete the `LOCAL_USERS` array and `loginLocal` function in `frontend/src/auth/AuthContext.js` |
+| **Add CloudFront security headers** | Enforce HSTS, prevent clickjacking, disable MIME-type sniffing | Create a `aws_cloudfront_response_headers_policy` with security headers and attach to the distribution |
+| **Protect sensitive variables** | Avoid committing org-specific IDs or ARNs | Keep all secrets in `terraform.tfvars` (git-ignored) or use a secrets manager |
 
 ---
 
 ## Cost Estimate
 
-Fully serverless — **you only pay when things run.**
+Fully serverless — **you only pay when things run.** The crawler runs every 6 hours by default (4×/day).
 
-> **Note on schedule:** The crawler runs every **6 hours by default** (`crawler_schedule_interval = "6 hours"`), meaning **4 full crawls per day / ~120 per month**. Adjust this variable to reduce cost.
+| Scale | Accounts | Estimated Monthly Cost |
+|-------|----------|----------------------|
+| **Small** | 20 | **~$0.10** |
+| **Medium** | 100 | **~$0.50** |
+| **Large** | 500 | **~$2.75** |
 
-### Cost Breakdown by Service
+> Most small-to-medium deployments fall within the **AWS Free Tier**.
 
-#### ⚡ Lambda (256 MB, ARM64 Graviton)
-
-Each crawl invokes the worker Lambda once per account (up to 10 concurrently).
-
-| Scale | Accounts | Invocations/mo | Avg Duration | GB-seconds/mo | Monthly Cost |
-|-------|----------|---------------|-------------|--------------|-------------|
-| Small | 20 | ~2,400 | ~10s | ~1,200 | **~$0.02** |
-| Medium | 100 | ~12,000 | ~15s | ~9,000 | **~$0.15** |
-| Large | 500 | ~60,000 | ~20s | ~75,000 | **~$1.20** |
-
-> AWS Free Tier: 1M requests + 400,000 GB-seconds/month. Small orgs are **free**.
-
-#### 🔀 Step Functions (STANDARD workflow)
-
-STANDARD Step Functions cost **$0.025 per 1,000 state transitions**. Each crawl execution uses `N accounts + 3` state transitions (`ListAccounts` → `CrawlAccounts` Map → N × `ProcessAccount` → `CrawlComplete`).
-
-| Scale | Accounts | Transitions/crawl | Crawls/mo | Transitions/mo | Monthly Cost |
-|-------|----------|------------------|-----------|----------------|-------------|
-| Small | 20 | 23 | 120 | ~2,760 | **~$0.07** |
-| Medium | 100 | 103 | 120 | ~12,360 | **~$0.31** |
-| Large | 500 | 503 | 120 | ~60,360 | **~$1.51** |
-
-> ⚠️ **Step Functions is the dominant cost driver** at scale. If running 500 accounts, consider switching `crawler_schedule_interval` to `"1 day"` to reduce to ~$0.38/month.
-
-#### 📊 Athena
-
-Athena charges **$5 per TB scanned**. Each CSV file per account is ~10–100 KB. Partitioning by `snapshot_date` limits scans to the queried date only.
-
-| Scale | CSV size/account | Data scanned/query | Monthly Cost |
-|-------|-----------------|-------------------|-------------|
-| Small | ~10 KB | ~200 KB | **< $0.01** |
-| Medium | ~50 KB | ~5 MB | **< $0.01** |
-| Large | ~200 KB | ~100 MB | **< $0.01** |
-
-> Athena cost is negligible at all scales due to partition projection.
-
-#### 🌩️ CloudFront + S3
-
-| Resource | Cost |
-|----------|------|
-| S3 storage (tiny CSVs, 7-day lifecycle) | **< $0.01/mo** |
-| CloudFront (low-traffic internal tool) | **~$0.01–$0.05/mo** |
-| S3 PUT/GET requests | **< $0.01/mo** |
-
-#### 📋 Other Services (Effectively Free)
-
-| Service | Why Free |
-|---------|---------|
-| EventBridge Scheduler | First 14M invocations/mo free |
-| Glue Data Catalog | Free for < 1M objects |
-| CloudWatch Logs (7-day retention) | Minimal log volume |
-| Lambda Function URL | No additional charge |
-
-### Monthly Cost Summary
-
-| Scale | Accounts | Crawls/day | Lambda | Step Functions | Athena | CloudFront + S3 | **Total** |
-|-------|----------|-----------|--------|---------------|--------|----------------|---------|
-| Small | 20 | 4 | ~$0.02 | ~$0.07 | < $0.01 | ~$0.02 | **~$0.11** |
-| Medium | 100 | 4 | ~$0.15 | ~$0.31 | < $0.01 | ~$0.02 | **~$0.49** |
-| Large | 500 | 4 | ~$1.20 | ~$1.51 | < $0.01 | ~$0.02 | **~$2.74** |
-| Large | 500 | 1 | ~$0.30 | ~$0.38 | < $0.01 | ~$0.02 | **~$0.71** |
-
-### Cost Optimization Tips
-
-- **Reduce crawl frequency**: Set `crawler_schedule_interval = "1 day"` to cut Step Functions costs by 4×. This is the single most effective way to keep PoC costs down while maintaining daily visibility.
-- **Fewer accounts**: Use concurrency limits (`worker_reserved_concurrency`) to throttle parallel execution and limit the blast radius.
-- **Cache hits**: The `summary.json` fast-load cache means most UI loads never hit Athena, saving on TB-scanned costs.
-
-### PoC & Testing Considerations
-
-For Proof of Concept (PoC) environments, the architecture prioritizes **Minimal Recurring Costs** over **Defense-in-Depth**. Features like AWS WAF and High-Availability Multi-AZ configurations are optional to ensure that the initial barrier to entry is as close to the AWS Free Tier as possible. 
-
-If transitioning from a PoC to a Production environment, consult the [Security](#security) section for recommended hardening steps.
+**💡 Reduce costs further:** Set `crawler_schedule_interval = "1 day"` in `terraform.tfvars` to crawl once daily instead of 4×. This cuts the largest cost driver (Step Functions) by ~75% — a 500-account org drops to **~$0.70/month**.
 
 ---
 
