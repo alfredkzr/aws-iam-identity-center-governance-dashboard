@@ -233,6 +233,13 @@ function AppContent() {
         }
     }, []);
 
+    const refreshSecurityData = useCallback(() => {
+        setPsData(null);
+        setRiskPolicies(null);
+        fetchPermissionSets(psSelectedDate, true);
+        fetchRiskPolicies();
+    }, [psSelectedDate, fetchPermissionSets, fetchRiskPolicies]);
+
     useEffect(() => {
         if (isAuthenticated && activeTab === 'security' && riskPolicies === null) {
             fetchRiskPolicies();
@@ -330,6 +337,7 @@ function AppContent() {
                         riskPolicies={riskPolicies}
                         riskSource={riskSource}
                         onSaveRiskPolicies={saveRiskPolicies}
+                        onRefresh={refreshSecurityData}
                         loading={riskLoading}
                     />
                 )}

@@ -65,13 +65,17 @@ def _load_risk_policies():
     return _risk_policies_cache
 
 
-def _match_pattern(value, pattern, match_type):
-    """Check if a value matches a pattern using exact or wildcard matching."""
-    if match_type == "exact":
+def _match_pattern(value, pattern):
+    """Check if a value matches a pattern. Auto-detects wildcard patterns.
+
+    Special case: a bare '*' or '*:*' pattern is treated as an exact match
+    (catches literal IAM Action: '*'), not as a glob that matches everything.
+    """
+    if pattern in ('*', '*:*'):
         return value == pattern
-    elif match_type == "wildcard":
+    if any(c in pattern for c in ('*', '?', '[', ']')):
         return fnmatch.fnmatch(value, pattern)
-    return False
+    return value == pattern
 
 
 def _evaluate_risk(record, risk_rules):
@@ -114,7 +118,6 @@ def _evaluate_risk(record, risk_rules):
     for rule in rules:
         rule_type = rule.get("type", "")
         pattern = rule.get("pattern", "")
-        match_type = rule.get("match", "exact")
         risk = rule.get("risk", "low")
         reason = rule.get("reason", "")
 
@@ -122,12 +125,12 @@ def _evaluate_risk(record, risk_rules):
 
         if rule_type == "managed_policy_name":
             for name in policy_names:
-                if _match_pattern(name, pattern, match_type):
+                if _match_pattern(name, pattern):
                     matched = True
                     break
         elif rule_type == "inline_policy_action":
             for action in inline_actions:
-                if _match_pattern(action, pattern, match_type):
+                if _match_pattern(action, pattern):
                     matched = True
                     break
 

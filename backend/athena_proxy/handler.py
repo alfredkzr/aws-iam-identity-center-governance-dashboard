@@ -12,6 +12,7 @@ import hashlib
 import json
 import logging
 import os
+import fnmatch
 import re
 import time
 import urllib.request
@@ -20,6 +21,7 @@ from datetime import datetime, timezone
 
 import boto3
 from botocore.config import Config
+from default_risk_policies import DEFAULT_RISK_POLICIES, RISK_LEVELS
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -428,6 +430,116 @@ def _get_available_dates(prefix="assignments/snapshot_date="):
         return []
 
 
+# ---------------------------------------------------------------------------
+# Risk Evaluation Helpers (re-evaluate at query time)
+# ---------------------------------------------------------------------------
+def _load_risk_policies():
+    """Load risk policies from S3 or fall back to defaults.
+
+    Unlike the worker, this does NOT use a module-level cache so that
+    every request picks up the latest saved rules.
+    """
+    try:
+        resp = s3.get_object(Bucket=INVENTORY_BUCKET, Key=RISK_POLICIES_KEY)
+        body = resp["Body"].read().decode("utf-8")
+        policies = json.loads(body)
+        logger.info("Loaded custom risk policies from S3 for re-evaluation")
+        return policies
+    except Exception:
+        logger.info("No custom risk policies in S3 — using defaults for re-evaluation")
+        return DEFAULT_RISK_POLICIES
+
+
+def _match_pattern(value, pattern):
+    """Check if a value matches a pattern. Auto-detects wildcard patterns.
+
+    Special case: a bare '*' or '*:*' pattern is treated as an exact match
+    (catches literal IAM Action: '*'), not as a glob that matches everything.
+    """
+    if pattern in ('*', '*:*'):
+        return value == pattern
+    if any(c in pattern for c in ('*', '?', '[', ']')):
+        return fnmatch.fnmatch(value, pattern)
+    return value == pattern
+
+
+def _evaluate_risk(record, risk_rules):
+    """Evaluate a permission set record against risk rules.
+
+    Returns (risk_level, risk_reasons) where risk_level is the highest
+    matched level and risk_reasons is a list of matched rule descriptions.
+    """
+    highest_level = "low"
+    reasons = []
+
+    rules = risk_rules.get("rules", [])
+
+    # Collect all policy names for managed_policy_name rules
+    policy_names = []
+    for p in record.get("aws_managed_policies", []):
+        policy_names.append(p.get("name", ""))
+    for p in record.get("customer_managed_policies", []):
+        policy_names.append(p.get("name", ""))
+
+    # Collect all inline policy actions
+    inline_actions = []
+    inline_policy_str = record.get("inline_policy", "")
+    if inline_policy_str:
+        try:
+            policy_doc = json.loads(inline_policy_str) if isinstance(inline_policy_str, str) else inline_policy_str
+            statements = policy_doc.get("Statement", [])
+            if isinstance(statements, dict):
+                statements = [statements]
+            for stmt in statements:
+                if stmt.get("Effect", "").lower() != "allow":
+                    continue
+                actions = stmt.get("Action", [])
+                if isinstance(actions, str):
+                    actions = [actions]
+                inline_actions.extend(actions)
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+    for rule in rules:
+        rule_type = rule.get("type", "")
+        pattern = rule.get("pattern", "")
+        risk = rule.get("risk", "low")
+        reason = rule.get("reason", "")
+
+        matched = False
+
+        if rule_type == "managed_policy_name":
+            for name in policy_names:
+                if _match_pattern(name, pattern):
+                    matched = True
+                    break
+        elif rule_type == "inline_policy_action":
+            for action in inline_actions:
+                if _match_pattern(action, pattern):
+                    matched = True
+                    break
+
+        if matched:
+            reasons.append({
+                "rule": pattern,
+                "risk": risk,
+                "reason": reason,
+            })
+            if RISK_LEVELS.get(risk, 0) > RISK_LEVELS.get(highest_level, 0):
+                highest_level = risk
+
+    return highest_level, reasons
+
+
+def _reeval_risk_scores(records):
+    """Re-evaluate risk scores on a list of permission set records in place."""
+    risk_policies = _load_risk_policies()
+    for record in records:
+        risk_level, risk_reasons = _evaluate_risk(record, risk_policies)
+        record["risk_level"] = risk_level
+        record["risk_reasons"] = risk_reasons
+
+
 def _handle_permission_sets(snapshot_date, force_refresh):
     """Handle permission sets request — reads JSON directly from S3."""
     cache_key = f"ps_summary_{snapshot_date}.json" if snapshot_date else "ps_summary.json"
@@ -441,7 +553,10 @@ def _handle_permission_sets(snapshot_date, force_refresh):
             if age <= CACHE_MAX_AGE_SECONDS:
                 logger.info("Permission sets cache hit")
                 body = cached_resp["Body"].read().decode("utf-8")
-                return _response(200, json.loads(body))
+                cached_data = json.loads(body)
+                # Re-evaluate risk at query time (always uses latest rules)
+                _reeval_risk_scores(cached_data.get("permission_sets", []))
+                return _response(200, cached_data)
         except Exception:
             pass
 
@@ -465,6 +580,9 @@ def _handle_permission_sets(snapshot_date, force_refresh):
     except Exception as exc:
         logger.error(f"Failed to read permission sets from S3: {exc}")
         records = []
+
+    # Re-evaluate risk at query time (always uses latest rules)
+    _reeval_risk_scores(records)
 
     result = {
         "snapshot_date": snapshot_date,
@@ -500,7 +618,6 @@ def _handle_get_risk_policies():
         logger.info("Loaded custom risk policies from S3")
         return _response(200, {"source": "custom", "policies": policies})
     except Exception:
-        from default_risk_policies import DEFAULT_RISK_POLICIES
         logger.info("No custom risk policies — returning defaults")
         return _response(200, {"source": "default", "policies": DEFAULT_RISK_POLICIES})
 
@@ -524,9 +641,8 @@ def _handle_save_risk_policies(event):
             return _response(400, {"error": "'rules' must be an array"})
 
         # Validate each rule
-        required_fields = {"type", "pattern", "match", "risk", "reason"}
+        required_fields = {"type", "pattern", "risk", "reason"}
         valid_types = {"managed_policy_name", "inline_policy_action"}
-        valid_match = {"exact", "wildcard"}
         valid_risk = {"critical", "high", "medium", "low"}
 
         for i, rule in enumerate(policies["rules"]):
@@ -535,8 +651,6 @@ def _handle_save_risk_policies(event):
                 return _response(400, {"error": f"Rule {i}: missing fields: {', '.join(missing)}"})
             if rule["type"] not in valid_types:
                 return _response(400, {"error": f"Rule {i}: invalid type '{rule['type']}'. Must be one of: {', '.join(valid_types)}"})
-            if rule["match"] not in valid_match:
-                return _response(400, {"error": f"Rule {i}: invalid match '{rule['match']}'. Must be 'exact' or 'wildcard'"})
             if rule["risk"] not in valid_risk:
                 return _response(400, {"error": f"Rule {i}: invalid risk '{rule['risk']}'. Must be one of: {', '.join(valid_risk)}"})
 
