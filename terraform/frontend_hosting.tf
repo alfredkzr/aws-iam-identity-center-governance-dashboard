@@ -184,12 +184,13 @@ resource "null_resource" "frontend_deploy" {
   provisioner "local-exec" {
     working_dir = "${path.module}/../frontend"
     environment = {
-      REACT_APP_API_ENDPOINT   = "https://${aws_cloudfront_distribution.frontend.domain_name}/api"
-      REACT_APP_AWS_REGION     = var.aws_region
-      REACT_APP_OKTA_DOMAIN              = var.okta_domain
-      REACT_APP_OKTA_CLIENT_ID           = var.okta_client_id
-      REACT_APP_LOCAL_ADMIN_USERNAME     = var.local_admin_username
-      REACT_APP_LOCAL_ADMIN_PASSWORD     = var.local_admin_password
+      REACT_APP_API_ENDPOINT         = "https://${aws_cloudfront_distribution.frontend.domain_name}/api"
+      REACT_APP_AWS_REGION           = var.aws_region
+      REACT_APP_OKTA_DOMAIN          = var.okta_domain
+      REACT_APP_OKTA_CLIENT_ID       = var.okta_client_id
+      REACT_APP_LOCAL_ADMIN_USERNAME = var.local_admin_username
+      REACT_APP_LOCAL_ADMIN_PASSWORD = var.local_admin_password
+      REACT_APP_LOCAL_API_KEY        = var.okta_domain == "" ? local.effective_api_key : ""
     }
     command = <<-EOT
       npm ci --prefer-offline --no-audit

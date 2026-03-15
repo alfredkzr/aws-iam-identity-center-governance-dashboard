@@ -28,15 +28,15 @@ resource "aws_glue_catalog_table" "assignments" {
   table_type = "EXTERNAL_TABLE"
 
   parameters = {
-    "classification"  = "csv"
-    "skip.header.line.count" = "1"
-    "projection.enabled" = "true"
-    "projection.snapshot_date.type" = "date"
-    "projection.snapshot_date.format" = "yyyy-MM-dd"
-    "projection.snapshot_date.range" = "2024-01-01,NOW"
-    "projection.snapshot_date.interval" = "1"
+    "classification"                         = "csv"
+    "skip.header.line.count"                 = "1"
+    "projection.enabled"                     = "true"
+    "projection.snapshot_date.type"          = "date"
+    "projection.snapshot_date.format"        = "yyyy-MM-dd"
+    "projection.snapshot_date.range"         = "2024-01-01,NOW"
+    "projection.snapshot_date.interval"      = "1"
     "projection.snapshot_date.interval.unit" = "DAYS"
-    "storage.location.template" = "s3://${aws_s3_bucket.inventory.id}/assignments/snapshot_date=$${snapshot_date}/"
+    "storage.location.template"              = "s3://${aws_s3_bucket.inventory.id}/assignments/snapshot_date=$${snapshot_date}/"
   }
 
   partition_keys {
@@ -118,14 +118,14 @@ resource "aws_glue_catalog_table" "permission_sets" {
   table_type = "EXTERNAL_TABLE"
 
   parameters = {
-    "classification"                        = "json"
-    "projection.enabled"                    = "true"
-    "projection.snapshot_date.type"         = "date"
-    "projection.snapshot_date.format"       = "yyyy-MM-dd"
-    "projection.snapshot_date.range"        = "2024-01-01,NOW"
-    "projection.snapshot_date.interval"     = "1"
+    "classification"                         = "json"
+    "projection.enabled"                     = "true"
+    "projection.snapshot_date.type"          = "date"
+    "projection.snapshot_date.format"        = "yyyy-MM-dd"
+    "projection.snapshot_date.range"         = "2024-01-01,NOW"
+    "projection.snapshot_date.interval"      = "1"
     "projection.snapshot_date.interval.unit" = "DAYS"
-    "storage.location.template"            = "s3://${aws_s3_bucket.inventory.id}/permission_sets/snapshot_date=$${snapshot_date}/"
+    "storage.location.template"              = "s3://${aws_s3_bucket.inventory.id}/permission_sets/snapshot_date=$${snapshot_date}/"
   }
 
   partition_keys {
@@ -142,7 +142,7 @@ resource "aws_glue_catalog_table" "permission_sets" {
       serialization_library = "org.openx.data.jsonserde.JsonSerDe"
 
       parameters = {
-        "dots.in.keys" = "false"
+        "dots.in.keys"     = "false"
         "case.insensitive" = "true"
       }
     }

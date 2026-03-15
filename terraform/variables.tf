@@ -129,8 +129,14 @@ variable "local_admin_username" {
 }
 
 variable "local_admin_password" {
-  description = "Password for local dashboard login (only used when Okta is not configured)"
+  description = "Password for local dashboard login (only used when Okta is not configured). NOTE: this value is embedded in the frontend JS bundle and visible to anyone who can view page source. Local auth is a development convenience, not a security boundary — use Okta SSO for production."
   type        = string
   default     = "admin123"
+}
+
+variable "local_api_key" {
+  description = "API key for backend authentication when Okta is not configured. If empty (default), a random 32-character key is auto-generated. NOTE: embedded in the frontend JS bundle — use Okta SSO for production."
+  type        = string
+  default     = ""
   sensitive   = true
 }

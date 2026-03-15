@@ -28,7 +28,7 @@ resource "aws_sfn_state_machine" "crawler" {
       }
 
       CrawlAccounts = {
-        Type = "Map"
+        Type      = "Map"
         ItemsPath = "$.accounts_result.accounts"
         ItemProcessor = {
           ProcessorConfig = {
@@ -43,7 +43,7 @@ resource "aws_sfn_state_machine" "crawler" {
               Parameters = {
                 FunctionName = aws_lambda_function.worker.arn
                 Payload = {
-                  action     = "process_account"
+                  action      = "process_account"
                   "account.$" = "$"
                 }
               }
@@ -79,7 +79,7 @@ resource "aws_sfn_state_machine" "crawler" {
       }
 
       CrawlComplete = {
-        Type = "Succeed"
+        Type    = "Succeed"
         Comment = "All accounts and permission sets processed successfully"
       }
     }

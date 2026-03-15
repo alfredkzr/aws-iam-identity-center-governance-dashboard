@@ -12,6 +12,9 @@ const OKTA_ENABLED = Boolean(OKTA_DOMAIN && OKTA_CLIENT_ID);
 
 
 // Local fallback credentials (when Okta is not configured)
+// WARNING: These are baked into the JS bundle at build time and visible to anyone
+// who can view page source. Local auth is a development convenience, NOT a security
+// boundary. Use Okta SSO for production deployments.
 const LOCAL_USERS = [
     {
         username: process.env.REACT_APP_LOCAL_ADMIN_USERNAME || 'admin',

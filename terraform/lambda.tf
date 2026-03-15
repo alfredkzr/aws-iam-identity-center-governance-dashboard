@@ -1,4 +1,17 @@
 # -----------------------------------------------------------------------------
+# Auto-generated API key for local auth (when Okta is not configured)
+# -----------------------------------------------------------------------------
+
+resource "random_password" "api_key" {
+  length  = 32
+  special = false
+}
+
+locals {
+  effective_api_key = var.local_api_key != "" ? var.local_api_key : random_password.api_key.result
+}
+
+# -----------------------------------------------------------------------------
 # Lambda Packaging
 # -----------------------------------------------------------------------------
 
@@ -70,6 +83,7 @@ resource "aws_lambda_function" "athena_proxy" {
       ATHENA_TABLE                 = "assignments"
       ATHENA_PERMISSION_SETS_TABLE = "permission_sets"
       OKTA_DOMAIN                  = var.okta_domain
+      LOCAL_API_KEY                = var.okta_domain == "" ? local.effective_api_key : ""
     }
   }
 }

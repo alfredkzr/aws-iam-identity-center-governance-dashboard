@@ -282,7 +282,7 @@ Then redeploy with `terraform apply`.
 ## Okta SSO Setup
 
 > [!IMPORTANT]
-> **Without Okta configured**, the dashboard uses local auth mode with default credentials (`admin` / `admin123`). You can customise these via the `local_admin_username` and `local_admin_password` Terraform variables or `REACT_APP_LOCAL_ADMIN_USERNAME` / `REACT_APP_LOCAL_ADMIN_PASSWORD` env vars. **Always configure Okta or change the defaults before production use.**
+> **Without Okta configured**, the dashboard uses local auth mode with default credentials (`admin` / `admin123`). You can customise these via the `local_admin_username` and `local_admin_password` Terraform variables, but note that **local auth credentials are embedded in the client-side JS bundle** and visible to anyone who can view page source. Local auth is a development convenience, not a security boundary. **Always configure Okta for production use.**
 
 ### 1. Create an Okta Application
 
@@ -447,8 +447,7 @@ The default deployment includes these security controls out of the box:
 
 | Action | Why | How |
 |--------|-----|-----|
-| **Configure Okta SSO** | Replace local demo credentials with production IdP | See [Okta SSO Setup](#okta-sso-setup) |
-| **Change default credentials** | Replace default `admin/admin123` with strong credentials | Set `local_admin_username` and `local_admin_password` in `terraform/terraform.tfvars` |
+| **Configure Okta SSO** | Local auth credentials are embedded in the JS bundle and visible to anyone who can view page source — they are a development convenience, not a security boundary. Always use a real IdP for production. | See [Okta SSO Setup](#okta-sso-setup) |
 | **Attach AWS WAFv2** | Protect against DDoS, bots, OWASP Top 10 | Create `aws_wafv2_web_acl` with AWS Managed Rules, associate with CloudFront |
 | **Add custom domain + TLS** | Replace `*.cloudfront.net` with your branded domain | ACM certificate in `us-east-1` + Route 53 alias + `viewer_certificate` block |
 | **Enable geo-restriction** | Limit access to operating regions | `restrictions.geo_restriction` in CloudFront |

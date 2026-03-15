@@ -9,6 +9,7 @@ Handles frontend requests for assignment data:
 
 import base64
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -36,6 +37,7 @@ ATHENA_TABLE = os.environ.get("ATHENA_TABLE", "assignments")
 ATHENA_PERMISSION_SETS_TABLE = os.environ.get("ATHENA_PERMISSION_SETS_TABLE", "permission_sets")
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
 OKTA_DOMAIN = os.environ.get("OKTA_DOMAIN", "")
+LOCAL_API_KEY = os.environ.get("LOCAL_API_KEY", "")
 
 RISK_POLICIES_KEY = "risk-policies.json"
 
@@ -78,7 +80,16 @@ def _validate_token(event):
     Skips validation entirely when OKTA_DOMAIN is not configured (local dev).
     """
     if not OKTA_DOMAIN:
-        return True, None
+        if not LOCAL_API_KEY:
+            logger.warning("No auth mechanism configured (no OKTA_DOMAIN, no LOCAL_API_KEY)")
+            return False, "Server authentication not configured"
+        headers = event.get("headers") or {}
+        provided_key = headers.get("x-api-key", "")
+        if not provided_key:
+            return False, "Missing X-Api-Key header"
+        if not hmac.compare_digest(provided_key, LOCAL_API_KEY):
+            return False, "Invalid API key"
+        return True, {"auth": "api_key"}
 
     headers = event.get("headers") or {}
     token = headers.get("x-auth-token", "")

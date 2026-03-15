@@ -61,3 +61,4 @@ identity_store_id = "d-xxxxxxxxxx"
 
 # local_admin_username = "admin"
 # local_admin_password = "admin123"
+# local_api_key        = ""   # Auto-generated if empty; override only if needed

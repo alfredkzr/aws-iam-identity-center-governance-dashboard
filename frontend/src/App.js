@@ -8,15 +8,19 @@ import SecurityTab from './components/SecurityTab';
 import LoginPage from './components/LoginPage';
 
 const API_ENDPOINT = process.env.REACT_APP_API_ENDPOINT || '';
+const LOCAL_API_KEY = process.env.REACT_APP_LOCAL_API_KEY || '';
 
-/** Wraps fetch() to attach the Okta access token via a custom header.
- *  Uses X-Auth-Token instead of Authorization because CloudFront OAC
+/** Wraps fetch() to attach auth headers.
+ *  Uses X-Auth-Token (Okta) or X-Api-Key (local) because CloudFront OAC
  *  replaces the Authorization header with its own SigV4 signature. */
 function apiFetch(url, options = {}) {
     const token = sessionStorage.getItem('access_token');
     const headers = { ...options.headers };
     if (token) {
         headers['X-Auth-Token'] = token;
+    }
+    if (LOCAL_API_KEY) {
+        headers['X-Api-Key'] = LOCAL_API_KEY;
     }
     return fetch(url, { ...options, headers });
 }
