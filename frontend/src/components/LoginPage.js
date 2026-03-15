@@ -27,45 +27,20 @@ function LoginPage() {
 
     return (
         <div className="login-page">
-            {/* Left panel — branding */}
-            <div className="login-hero">
-                <div className="login-hero__content">
-                    <div className="login-hero__logo">
-                        <svg width="52" height="52" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <div className="login-center">
+                {/* Branding above card */}
+                <div className="login-brand">
+                    <div className="login-brand__logo">
+                        <svg width="44" height="44" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M15 2L4 7v7c0 7.1 4.7 13.3 11 15 6.3-1.7 11-7.9 11-15V7L15 2z" stroke="#FF9900" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
                             <path d="M10.5 15l3 3 6-6.5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                         </svg>
                     </div>
-                    <h1 className="login-hero__title">AWS IAM Identity Center</h1>
-                    <p className="login-hero__subtitle">Security Governance Dashboard</p>
-                    <div className="login-hero__features">
-                        <div className="login-hero__feature">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
-                                <rect x="9" y="3" width="6" height="4" rx="1" />
-                                <path d="M9 14l2 2 4-4" />
-                            </svg>
-                            <span>Audit SSO assignments across your entire AWS Organization</span>
-                        </div>
-                        <div className="login-hero__feature">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                            </svg>
-                            <span>Automated risk scoring for privilege escalation paths</span>
-                        </div>
-                        <div className="login-hero__feature">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="3" y="11" width="18" height="11" rx="2" />
-                                <path d="M7 11V7a5 5 0 0110 0v4" />
-                            </svg>
-                            <span>Deep-dive permission set policies, boundaries & tags</span>
-                        </div>
-                    </div>
+                    <h1 className="login-brand__title">AWS IAM Identity Center</h1>
+                    <p className="login-brand__subtitle">Security Governance Dashboard</p>
                 </div>
-            </div>
 
-            {/* Right panel — login form */}
-            <div className="login-form-panel">
+                {/* Login card */}
                 <div className="login-card">
                     <div className="login-card__header">
                         <h2 className="login-card__title">Welcome back</h2>
@@ -125,7 +100,31 @@ function LoginPage() {
                             </button>
                         </form>
                     )}
+                </div>
 
+                {/* Features below card */}
+                <div className="login-features">
+                    <div className="login-features__item">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+                            <rect x="9" y="3" width="6" height="4" rx="1" />
+                            <path d="M9 14l2 2 4-4" />
+                        </svg>
+                        <span>Audit SSO assignments across your entire AWS Organization</span>
+                    </div>
+                    <div className="login-features__item">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        </svg>
+                        <span>Automated risk scoring for privilege escalation paths</span>
+                    </div>
+                    <div className="login-features__item">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" />
+                            <path d="M7 11V7a5 5 0 0110 0v4" />
+                        </svg>
+                        <span>Deep-dive permission set policies, boundaries & tags</span>
+                    </div>
                 </div>
             </div>
         </div>

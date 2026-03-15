@@ -34,3 +34,9 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Presentation
+presentation.pptx
+generate_presentation.py
+speaker_notes.md
+assets/icons/
