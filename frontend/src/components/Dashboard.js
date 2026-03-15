@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect, useDeferredValue } from 'react';
+import { RiskBadge } from './SecurityTab';
 import './Dashboard.css';
 import GovernanceCharts from './GovernanceCharts';
 
-function Dashboard({ data, loading, error, availableDates = [], selectedDate, onDateChange, onRefresh }) {
+function Dashboard({ data, loading, error, availableDates = [], selectedDate, onDateChange, onRefresh, permissionSetsData }) {
     const [searchQuery, setSearchQuery] = useState('');
     const deferredSearchQuery = useDeferredValue(searchQuery);
     const [filterType, setFilterType] = useState('all');
@@ -30,6 +31,17 @@ function Dashboard({ data, loading, error, availableDates = [], selectedDate, on
     // Computed stats
     const stats = data?.stats || {};
     const assignments = data?.assignments || [];
+
+    // Build risk lookup from permission sets data
+    const riskByPS = useMemo(() => {
+        const map = {};
+        (permissionSetsData?.permission_sets || []).forEach(ps => {
+            if (ps.name && ps.risk_level) {
+                map[ps.name] = { risk_level: ps.risk_level, risk_reasons: ps.risk_reasons || [] };
+            }
+        });
+        return map;
+    }, [permissionSetsData]);
 
     // Filter and sort assignments
     const filteredAssignments = useMemo(() => {
@@ -305,6 +317,7 @@ function Dashboard({ data, loading, error, availableDates = [], selectedDate, on
                                 <SortHeader field="principal_name" label="Principal" current={sortField} direction={sortDirection} onSort={handleSort} />
                                 <th className="dashboard__th">Email</th>
                                 <SortHeader field="permission_set_name" label="Permission Set" current={sortField} direction={sortDirection} onSort={handleSort} />
+                                <th className="dashboard__th">Risk</th>
                                 <SortHeader field="group_name" label="Group" current={sortField} direction={sortDirection} onSort={handleSort} />
                             </tr>
                         </thead>
@@ -328,12 +341,19 @@ function Dashboard({ data, loading, error, availableDates = [], selectedDate, on
                                     <td className="dashboard__td">
                                         <span className="cell__permission">{a.permission_set_name}</span>
                                     </td>
+                                    <td className="dashboard__td">
+                                        {riskByPS[a.permission_set_name]?.risk_level && riskByPS[a.permission_set_name]?.risk_level !== 'low' ? (
+                                            <span title={(riskByPS[a.permission_set_name]?.risk_reasons || []).map(r => `${r.rule}: ${r.reason}`).join('\n')}>
+                                                <RiskBadge level={riskByPS[a.permission_set_name].risk_level} />
+                                            </span>
+                                        ) : null}
+                                    </td>
                                     <td className="dashboard__td cell__group">{a.group_name || '—'}</td>
                                 </tr>
                             ))}
                             {paginatedAssignments.length === 0 && (
                                 <tr>
-                                    <td colSpan="6" className="dashboard__td dashboard__empty">
+                                    <td colSpan="7" className="dashboard__td dashboard__empty">
                                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
                                             <circle cx="10" cy="10" r="8" />
                                             <path d="M7 13s1-1.5 3-1.5 3 1.5 3 1.5M7.5 7.5h.01M12.5 7.5h.01" />

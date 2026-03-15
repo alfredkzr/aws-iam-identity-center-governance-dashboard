@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import PermissionSetsTable from './components/PermissionSetsTable';
+import SecurityTab from './components/SecurityTab';
 import LoginPage from './components/LoginPage';
 
 const API_ENDPOINT = process.env.REACT_APP_API_ENDPOINT || '';
@@ -25,6 +26,11 @@ function AppContent() {
     const [psLoading, setPsLoading] = useState(false);
     const [psAvailableDates, setPsAvailableDates] = useState([]);
     const [psSelectedDate, setPsSelectedDate] = useState('');
+
+    // Risk policy state
+    const [riskPolicies, setRiskPolicies] = useState(null);
+    const [riskSource, setRiskSource] = useState('default');
+    const [riskLoading, setRiskLoading] = useState(false);
 
     const fetchData = useCallback(async (dateToFetch = null, force = false) => {
         setLoading(true);
@@ -168,6 +174,61 @@ function AppContent() {
         }
     }, [isAuthenticated, activeTab, fetchPermissionSets, psData]);
 
+    // Fetch risk policies when user switches to security tab
+    const fetchRiskPolicies = useCallback(async () => {
+        setRiskLoading(true);
+        try {
+            if (API_ENDPOINT) {
+                const response = await fetch(`${API_ENDPOINT}?type=risk_policies`);
+                if (response.ok) {
+                    const result = await response.json();
+                    setRiskPolicies(result.policies || null);
+                    setRiskSource(result.source || 'default');
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch risk policies:', err);
+        } finally {
+            setRiskLoading(false);
+        }
+    }, []);
+
+    const saveRiskPolicies = useCallback(async (policies) => {
+        if (API_ENDPOINT) {
+            if (policies === null) {
+                // Reset to defaults — delete the custom file by saving defaults
+                const response = await fetch(`${API_ENDPOINT}?type=risk_policies`);
+                const result = await response.json();
+                // Just re-fetch to get defaults
+                setRiskPolicies(result.policies || null);
+                setRiskSource('default');
+                return;
+            }
+            const response = await fetch(`${API_ENDPOINT}?type=save_risk_policies`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(policies),
+            });
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to save');
+            }
+            const result = await response.json();
+            setRiskPolicies(result.policies || policies);
+            setRiskSource('custom');
+        }
+    }, []);
+
+    useEffect(() => {
+        if (isAuthenticated && activeTab === 'security' && riskPolicies === null) {
+            fetchRiskPolicies();
+            // Also ensure permission sets data is loaded for risk stats
+            if (psData === null) {
+                fetchPermissionSets();
+            }
+        }
+    }, [isAuthenticated, activeTab, fetchRiskPolicies, riskPolicies, psData, fetchPermissionSets]);
+
     // Show loading while auth is initializing
     if (authLoading) {
         return (
@@ -215,6 +276,16 @@ function AppContent() {
                         </svg>
                         Permission Sets
                     </button>
+                    <button
+                        className={`tab-nav__tab ${activeTab === 'security' ? 'tab-nav__tab--active' : ''}`}
+                        onClick={() => setActiveTab('security')}
+                        id="tab-security"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        </svg>
+                        Security
+                    </button>
                 </div>
             </nav>
 
@@ -228,8 +299,9 @@ function AppContent() {
                         selectedDate={selectedDate}
                         onDateChange={(newDate) => fetchData(newDate)}
                         onRefresh={() => fetchData(selectedDate, true)}
+                        permissionSetsData={psData}
                     />
-                ) : (
+                ) : activeTab === 'permission_sets' ? (
                     <PermissionSetsTable
                         data={psData}
                         loading={psLoading}
@@ -237,6 +309,14 @@ function AppContent() {
                         selectedDate={psSelectedDate}
                         onDateChange={(newDate) => fetchPermissionSets(newDate)}
                         onRefresh={() => fetchPermissionSets(psSelectedDate, true)}
+                    />
+                ) : (
+                    <SecurityTab
+                        permissionSetsData={psData}
+                        riskPolicies={riskPolicies}
+                        riskSource={riskSource}
+                        onSaveRiskPolicies={saveRiskPolicies}
+                        loading={riskLoading}
                     />
                 )}
             </main>

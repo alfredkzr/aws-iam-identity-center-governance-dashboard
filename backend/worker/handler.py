@@ -37,6 +37,111 @@ _group_cache = {}
 _group_members_cache = {}
 _permission_set_cache = {}
 
+# Risk policies
+import fnmatch
+from default_risk_policies import DEFAULT_RISK_POLICIES, RISK_LEVELS
+
+_risk_policies_cache = None
+
+
+def _load_risk_policies():
+    """Load risk policies from S3 or fall back to defaults."""
+    global _risk_policies_cache
+    if _risk_policies_cache is not None:
+        return _risk_policies_cache
+
+    try:
+        resp = s3.get_object(
+            Bucket=INVENTORY_BUCKET,
+            Key="risk-policies.json",
+        )
+        body = resp["Body"].read().decode("utf-8")
+        _risk_policies_cache = json.loads(body)
+        logger.info("Loaded custom risk policies from S3")
+    except Exception:
+        logger.info("No custom risk policies in S3 — using defaults")
+        _risk_policies_cache = DEFAULT_RISK_POLICIES
+
+    return _risk_policies_cache
+
+
+def _match_pattern(value, pattern, match_type):
+    """Check if a value matches a pattern using exact or wildcard matching."""
+    if match_type == "exact":
+        return value == pattern
+    elif match_type == "wildcard":
+        return fnmatch.fnmatch(value, pattern)
+    return False
+
+
+def _evaluate_risk(record, risk_rules):
+    """Evaluate a permission set record against risk rules.
+
+    Returns (risk_level, risk_reasons) where risk_level is the highest
+    matched level and risk_reasons is a list of matched rule descriptions.
+    """
+    highest_level = "low"
+    reasons = []
+
+    rules = risk_rules.get("rules", [])
+
+    # Collect all policy names for managed_policy_name rules
+    policy_names = []
+    for p in record.get("aws_managed_policies", []):
+        policy_names.append(p.get("name", ""))
+    for p in record.get("customer_managed_policies", []):
+        policy_names.append(p.get("name", ""))
+
+    # Collect all inline policy actions
+    inline_actions = []
+    inline_policy_str = record.get("inline_policy", "")
+    if inline_policy_str:
+        try:
+            policy_doc = json.loads(inline_policy_str) if isinstance(inline_policy_str, str) else inline_policy_str
+            statements = policy_doc.get("Statement", [])
+            if isinstance(statements, dict):
+                statements = [statements]
+            for stmt in statements:
+                if stmt.get("Effect", "").lower() != "allow":
+                    continue
+                actions = stmt.get("Action", [])
+                if isinstance(actions, str):
+                    actions = [actions]
+                inline_actions.extend(actions)
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+    for rule in rules:
+        rule_type = rule.get("type", "")
+        pattern = rule.get("pattern", "")
+        match_type = rule.get("match", "exact")
+        risk = rule.get("risk", "low")
+        reason = rule.get("reason", "")
+
+        matched = False
+
+        if rule_type == "managed_policy_name":
+            for name in policy_names:
+                if _match_pattern(name, pattern, match_type):
+                    matched = True
+                    break
+        elif rule_type == "inline_policy_action":
+            for action in inline_actions:
+                if _match_pattern(action, pattern, match_type):
+                    matched = True
+                    break
+
+        if matched:
+            reasons.append({
+                "rule": pattern,
+                "risk": risk,
+                "reason": reason,
+            })
+            if RISK_LEVELS.get(risk, 0) > RISK_LEVELS.get(highest_level, 0):
+                highest_level = risk
+
+    return highest_level, reasons
+
 
 def lambda_handler(event, context):
     """Main Lambda entry point — routes to action handler."""
@@ -159,19 +264,39 @@ def handle_crawl_permission_sets():
     """Crawl all permission set details and write JSON to S3."""
     logger.info("Crawling all permission set details")
 
+    # Load risk policies (custom from S3, or defaults)
+    risk_policies = _load_risk_policies()
+    logger.info(f"Loaded {len(risk_policies.get('rules', []))} risk rules")
+
     permission_set_arns = list_permission_sets()
     records = []
 
     for ps_arn in permission_set_arns:
         try:
             record = _describe_permission_set_full(ps_arn)
+
+            # Evaluate risk for this permission set
+            risk_level, risk_reasons = _evaluate_risk(record, risk_policies)
+            record["risk_level"] = risk_level
+            record["risk_reasons"] = risk_reasons
+
             records.append(record)
         except Exception as exc:
             logger.warning(f"Failed to crawl permission set {ps_arn}: {exc}")
-            records.append({"arn": ps_arn, "name": ps_arn, "error": str(exc)})
+            records.append({
+                "arn": ps_arn, "name": ps_arn, "error": str(exc),
+                "risk_level": "low", "risk_reasons": [],
+            })
 
     # Write JSON to S3
     _write_permission_sets_json(records)
+
+    # Log risk summary
+    risk_counts = {}
+    for r in records:
+        lvl = r.get("risk_level", "low")
+        risk_counts[lvl] = risk_counts.get(lvl, 0) + 1
+    logger.info(f"Risk summary: {risk_counts}")
 
     logger.info(f"Crawled {len(records)} permission sets")
     return {

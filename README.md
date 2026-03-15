@@ -1,4 +1,4 @@
-# AWS IAM Identity Center Governance Dashboard
+# Security Governance Dashboard
 
 > **A serverless, open-source dashboard to audit IAM Identity Center (SSO) permission assignments and permission set configurations across your entire AWS Organization — deployed in minutes with Terraform.**
 <img width="2056" height="1163" alt="image" src="https://github.com/user-attachments/assets/51660a53-8f0b-41e1-a72b-9162856657df" />
@@ -31,7 +31,7 @@
 
 ## Overview
 
-The **AWS IAM Identity Center Governance Dashboard** gives security teams and auditors a single-pane view of _who has access to what_ and _what each permission set contains_ across every account in an AWS Organization. It crawls IAM Identity Center assignments and permission set configurations on a configurable schedule (every 6 hours by default), stores structured snapshots in S3, and surfaces them through an interactive React UI — all without managing servers.
+The **Security Governance Dashboard** gives security teams and auditors a single-pane view of _who has access to what_ and _what each permission set contains_ across every account in an AWS Organization. It crawls IAM Identity Center assignments and permission set configurations on a configurable schedule (every 6 hours by default), stores structured snapshots in S3, and surfaces them through an interactive React UI — all without managing servers.
 
 **Built for teams who need:**
 - Continuous visibility into SSO permission sprawl and permission set configurations
@@ -89,6 +89,7 @@ flowchart TD
 |---------|-------------|
 | 🏢 **Full Org Crawl** | Discovers all accounts in your AWS Organization and audits IAM Identity Center assignments |
 | 🔒 **Permission Set Details** | Crawls every permission set — AWS managed policies, customer managed policies, inline policies, permissions boundaries, session duration, tags, description, and provisioning status |
+| 🛡️ **Security Risk Scoring** | Evaluates permission sets against customizable rules (based on CIS/Rhino Security) to highlight high-risk privileges and privilege escalation paths |
 | ⚡ **Distributed Processing** | Step Functions Distributed Map runs one Lambda per account in parallel |
 | 👤 **User & Group Resolution** | Resolves GUIDs to friendly names, emails, and expanded group memberships |
 | 🚀 **Fast-Load Cache** | Athena Proxy serves pre-rendered `summary.json` from S3 before falling back to SQL |
@@ -104,7 +105,7 @@ flowchart TD
 
 ## Dashboard Usage
 
-The dashboard has two main tabs:
+The dashboard has three main tabs:
 
 ### Assignments Tab
 
@@ -127,6 +128,14 @@ Provides a full breakdown of every permission set configuration. Key interaction
 - **Export:** click the **Export** button in the toolbar to download a CSV or PDF of the full table.
 - **AWS Console link:** click any permission set name to open its detail page directly in the AWS IAM Identity Center console.
 
+### Security Tab
+
+Provides an interactive editor to manage the risk policy rules used to score permission sets.
+
+- **Risk Overview:** See a summary of how many permission sets fall into Critical, High, Medium, and Low risk categories.
+- **Flagged Permission Sets:** A consolidated view of all permission sets flagged with a risk level above "Low", including exactly which rules they matched and why they are considered risky.
+- **Rule Editor:** Add, edit, or delete custom risk rules based on managed policy names or inline policy actions (supports exact or wildcard matching).
+- **Default Fallback:** Ships with a robust set of default industry-standard rules out of the box (which can be restored at any time).
 
 ## Prerequisites
 

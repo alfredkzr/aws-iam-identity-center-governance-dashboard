@@ -1,0 +1,388 @@
+/* ================================================================
+   SecurityTab — Risk Overview & Policy Editor
+   ================================================================ */
+
+.security-container {
+    padding: 0 0 2rem;
+}
+
+/* ---- Risk Stats Cards ---- */
+.security-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.security-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    transition: box-shadow 0.15s;
+}
+
+.security-stat-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.security-stat-card--critical { border-left: 4px solid #dc2626; }
+.security-stat-card--high     { border-left: 4px solid #ea580c; }
+.security-stat-card--medium   { border-left: 4px solid #d97706; }
+.security-stat-card--low      { border-left: 4px solid #6b7280; }
+
+.security-stat-card__icon {
+    font-size: 1.5rem;
+}
+
+.security-stat-card__content {
+    display: flex;
+    flex-direction: column;
+}
+
+.security-stat-card__value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #16191f;
+}
+
+.security-stat-card__label {
+    font-size: 0.78rem;
+    color: #687078;
+    margin-top: 2px;
+}
+
+/* ---- Panel ---- */
+.security-panel {
+    background: #fff;
+    border: 1px solid #eaeded;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.security-panel__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #eaeded;
+    background: #fafafa;
+}
+
+.security-panel__title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #16191f;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.security-panel__subtitle {
+    margin: 4px 0 0;
+    font-size: 0.78rem;
+    color: #687078;
+}
+
+.security-panel__actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.security-panel__body {
+    padding: 0;
+}
+
+.security-panel__body--scroll {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.security-panel__empty {
+    padding: 2rem;
+    text-align: center;
+    color: #687078;
+    font-size: 0.85rem;
+}
+
+/* ---- Buttons ---- */
+.security-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 14px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    border: 1px solid #d5dbdb;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #fff;
+    color: #16191f;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.security-btn:hover { background: #fafafa; }
+
+.security-btn--primary {
+    background: #0073bb;
+    color: #fff;
+    border-color: #0073bb;
+}
+.security-btn--primary:hover {
+    background: #005d99;
+}
+
+.security-btn--success {
+    background: #037f0c;
+    color: #fff;
+    border-color: #037f0c;
+}
+.security-btn--success:hover {
+    background: #026608;
+}
+
+.security-btn--danger {
+    color: #dc2626;
+    border-color: #fecaca;
+}
+.security-btn--danger:hover {
+    background: #fef2f2;
+}
+
+.security-btn--ghost {
+    border: 1px solid #d5dbdb;
+    background: transparent;
+}
+.security-btn--ghost:hover {
+    background: #f2f3f3;
+}
+
+.security-btn--icon {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+}
+
+.security-btn--add {
+    margin: 12px 16px;
+    border-style: dashed;
+    width: calc(100% - 32px);
+    justify-content: center;
+    color: #0073bb;
+    border-color: #0073bb80;
+}
+.security-btn--add:hover {
+    background: #f0f7ff;
+}
+
+/* ---- Message ---- */
+.security-message {
+    padding: 10px 16px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-bottom: 1px solid #eaeded;
+}
+.security-message--success {
+    background: #f0fdf4;
+    color: #166534;
+}
+.security-message--error {
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+/* ---- Risk Badge (shared) ---- */
+.risk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.risk-badge--sm {
+    padding: 2px 8px;
+    font-size: 0.68rem;
+}
+
+/* ---- Flagged Table ---- */
+.security-flagged-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.security-flagged-table th {
+    text-align: left;
+    padding: 10px 16px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #545b64;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #eaeded;
+    background: #fafafa;
+}
+
+.security-flagged-table td {
+    padding: 10px 16px;
+    font-size: 0.8rem;
+    border-bottom: 1px solid #f2f3f3;
+    vertical-align: top;
+}
+
+.security-flagged-table tr:last-child td {
+    border-bottom: none;
+}
+
+.security-ps-name {
+    display: block;
+    font-weight: 600;
+    color: #16191f;
+}
+
+.security-ps-arn {
+    display: block;
+    font-size: 0.7rem;
+    color: #9ba0a5;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    word-break: break-all;
+}
+
+.security-reasons {
+    margin: 0;
+    padding: 0 0 0 16px;
+    list-style: disc;
+}
+
+.security-reasons li {
+    margin-bottom: 4px;
+}
+
+.security-reason__rule {
+    background: #f2f3f3;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    margin-right: 4px;
+}
+
+.security-reason__text {
+    font-size: 0.78rem;
+    color: #545b64;
+}
+
+/* ---- Rules Table ---- */
+.security-rules-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.security-rules-table th {
+    text-align: left;
+    padding: 10px 16px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #545b64;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #eaeded;
+    background: #fafafa;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.security-rules-table td {
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    border-bottom: 1px solid #f2f3f3;
+    vertical-align: middle;
+}
+
+.security-rules-table select,
+.security-rules-table input[type="text"] {
+    width: 100%;
+    padding: 5px 8px;
+    font-size: 0.78rem;
+    border: 1px solid #d5dbdb;
+    border-radius: 4px;
+    background: #fff;
+    color: #16191f;
+}
+
+.security-rules-table select:focus,
+.security-rules-table input[type="text"]:focus {
+    outline: none;
+    border-color: #0073bb;
+    box-shadow: 0 0 0 2px rgba(0,115,187,0.15);
+}
+
+.security-rule-type {
+    font-size: 0.75rem;
+    color: #545b64;
+}
+
+.security-rule-pattern {
+    background: #f2f3f3;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: #16191f;
+}
+
+.security-rule-match {
+    font-size: 0.75rem;
+    color: #687078;
+}
+
+.security-rule-reason {
+    font-size: 0.78rem;
+    color: #545b64;
+}
+
+/* ---- Loading ---- */
+.security-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    color: #687078;
+    gap: 12px;
+    font-size: 0.85rem;
+}
+
+.security-loading__spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid #eaeded;
+    border-top: 3px solid #0073bb;
+    border-radius: 50%;
+    animation: spin 600ms linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+    .security-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .security-panel__header {
+        flex-direction: column;
+        gap: 12px;
+    }
+}

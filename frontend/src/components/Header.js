@@ -31,7 +31,7 @@ function Header({ user, onLogout }) {
                         </svg>
                     </div>
                     <div className="header__title-group">
-                        <h1 className="header__title">IAM Identity Center <span className="header__title-accent">Governance Dashboard</span></h1>
+                        <h1 className="header__title">Security <span className="header__title-accent">Governance Dashboard</span></h1>
                     </div>
                 </div>
 

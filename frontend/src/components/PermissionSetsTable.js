@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useDeferredValue, useEffect, useRef, useCallback } from 'react';
+import { RiskBadge } from './SecurityTab';
 import './PermissionSetsTable.css';
 
 // Default column definitions: key, label, sortable, initial width (px)
 const COLUMNS = [
     { key: 'name',        label: 'Name',        sortable: true,  initWidth: 140 },
+    { key: 'risk',        label: 'Risk',        sortable: true,  initWidth: 80 },
     { key: 'description', label: 'Description', sortable: false, initWidth: 200 },
     { key: 'provisioned', label: 'Provisioned', sortable: true,  initWidth: 90 },
     { key: 'session',     label: 'Session',     sortable: true,  initWidth: 65 },
@@ -16,6 +18,7 @@ const COLUMNS = [
 
 const SORT_FIELD_MAP = {
     name: 'name',
+    risk: 'risk_level',
     provisioned: 'provisioned_accounts',
     session: 'session_duration',
     policies: 'aws_managed_policies',
@@ -484,6 +487,16 @@ function PermissionSetsTable({ data, loading, availableDates = [], selectedDate,
                                                 <span className="ps-arn" title={ps.arn}>
                                                     {ps.arn ? `…${ps.arn.split('/').pop()}` : ''}
                                                 </span>
+                                            </td>
+                                            {/* Risk */}
+                                            <td className="ps-td">
+                                                {ps.risk_level && ps.risk_level !== 'low' ? (
+                                                    <span title={(ps.risk_reasons || []).map(r => `${r.rule}: ${r.reason}`).join('\n')}>
+                                                        <RiskBadge level={ps.risk_level} />
+                                                    </span>
+                                                ) : (
+                                                    <span className="ps-empty">—</span>
+                                                )}
                                             </td>
                                             {/* Description */}
                                             <td className="ps-td">

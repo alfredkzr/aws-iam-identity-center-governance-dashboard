@@ -30,11 +30,13 @@ ATHENA_TABLE = os.environ.get("ATHENA_TABLE", "assignments")
 ATHENA_PERMISSION_SETS_TABLE = os.environ.get("ATHENA_PERMISSION_SETS_TABLE", "permission_sets")
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
 
+RISK_POLICIES_KEY = "risk-policies.json"
+
 CACHE_KEY = "summary.json"
 CACHE_MAX_AGE_SECONDS = 3600  # 1 hour
 
 # Valid query types — allowlist to prevent abuse
-VALID_QUERY_TYPES = {"all", "summary", "dates", "permission_sets", "permission_sets_dates"}
+VALID_QUERY_TYPES = {"all", "summary", "dates", "permission_sets", "permission_sets_dates", "risk_policies", "save_risk_policies"}
 
 # Validate table names at cold-start to prevent SQL injection
 _TABLE_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -72,6 +74,13 @@ def lambda_handler(event, context):
         if query_type == "permission_sets_dates":
             dates = _get_available_dates(prefix="permission_sets/snapshot_date=")
             return _response(200, {"dates": dates})
+
+        # Risk policies: read or save
+        if query_type == "risk_policies":
+            return _handle_get_risk_policies()
+
+        if query_type == "save_risk_policies":
+            return _handle_save_risk_policies(event)
 
         # Permission sets: read directly from S3 JSON (fast path, no Athena needed)
         if query_type == "permission_sets":
@@ -398,6 +407,83 @@ def _handle_permission_sets(snapshot_date, force_refresh):
         logger.warning(f"Failed to cache permission sets: {exc}")
 
     return _response(200, result)
+
+# ---------------------------------------------------------------------------
+# Risk Policies Handlers
+# ---------------------------------------------------------------------------
+def _handle_get_risk_policies():
+    """Read risk-policies.json from S3 or return defaults."""
+    try:
+        resp = s3.get_object(Bucket=INVENTORY_BUCKET, Key=RISK_POLICIES_KEY)
+        body = resp["Body"].read().decode("utf-8")
+        policies = json.loads(body)
+        logger.info("Loaded custom risk policies from S3")
+        return _response(200, {"source": "custom", "policies": policies})
+    except Exception:
+        from default_risk_policies import DEFAULT_RISK_POLICIES
+        logger.info("No custom risk policies — returning defaults")
+        return _response(200, {"source": "default", "policies": DEFAULT_RISK_POLICIES})
+
+
+def _handle_save_risk_policies(event):
+    """Save risk-policies.json to S3."""
+    try:
+        # Parse request body
+        body = event.get("body", "")
+        if isinstance(body, str):
+            policies = json.loads(body)
+        else:
+            policies = body
+
+        # Validate schema
+        if not isinstance(policies, dict):
+            return _response(400, {"error": "Request body must be a JSON object"})
+        if "rules" not in policies:
+            return _response(400, {"error": "Missing 'rules' array in request body"})
+        if not isinstance(policies["rules"], list):
+            return _response(400, {"error": "'rules' must be an array"})
+
+        # Validate each rule
+        required_fields = {"type", "pattern", "match", "risk", "reason"}
+        valid_types = {"managed_policy_name", "inline_policy_action"}
+        valid_match = {"exact", "wildcard"}
+        valid_risk = {"critical", "high", "medium", "low"}
+
+        for i, rule in enumerate(policies["rules"]):
+            missing = required_fields - set(rule.keys())
+            if missing:
+                return _response(400, {"error": f"Rule {i}: missing fields: {', '.join(missing)}"})
+            if rule["type"] not in valid_types:
+                return _response(400, {"error": f"Rule {i}: invalid type '{rule['type']}'. Must be one of: {', '.join(valid_types)}"})
+            if rule["match"] not in valid_match:
+                return _response(400, {"error": f"Rule {i}: invalid match '{rule['match']}'. Must be 'exact' or 'wildcard'"})
+            if rule["risk"] not in valid_risk:
+                return _response(400, {"error": f"Rule {i}: invalid risk '{rule['risk']}'. Must be one of: {', '.join(valid_risk)}"})
+
+        # Ensure version field
+        policies.setdefault("version", 1)
+
+        # Write to S3
+        s3.put_object(
+            Bucket=INVENTORY_BUCKET,
+            Key=RISK_POLICIES_KEY,
+            Body=json.dumps(policies, indent=2).encode("utf-8"),
+            ContentType="application/json",
+        )
+
+        logger.info(f"Saved {len(policies['rules'])} risk rules to S3")
+        return _response(200, {
+            "status": "success",
+            "message": f"Saved {len(policies['rules'])} risk rules",
+            "policies": policies,
+        })
+
+    except json.JSONDecodeError:
+        return _response(400, {"error": "Invalid JSON in request body"})
+    except Exception as exc:
+        logger.exception(f"Failed to save risk policies: {exc}")
+        return _response(500, {"error": "Failed to save risk policies"})
+
 
 def _response(status_code, body, event=None):
     """Build a Lambda Function URL response with JSON body.
