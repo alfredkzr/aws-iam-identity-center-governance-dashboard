@@ -4,17 +4,57 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
    Auth Configuration
    ================================================================ */
 
-const OKTA_DOMAIN = process.env.REACT_APP_OKTA_DOMAIN || '';
-const OKTA_CLIENT_ID = process.env.REACT_APP_OKTA_CLIENT_ID || '';
-// Always use the current origin for redirect URI to work correctly in both dev and production
+/* ---- OIDC Provider Registry ---- */
+const OIDC_PROVIDERS = {
+    okta: {
+        name: 'Okta',
+        domain: process.env.REACT_APP_OKTA_DOMAIN || '',
+        clientId: process.env.REACT_APP_OKTA_CLIENT_ID || '',
+        isConfigured: () => Boolean(process.env.REACT_APP_OKTA_DOMAIN && process.env.REACT_APP_OKTA_CLIENT_ID),
+        authorizeUrl: (domain) => `https://${domain}/oauth2/default/v1/authorize`,
+        tokenUrl: (domain) => `https://${domain}/oauth2/default/v1/token`,
+        logoutUrl: (domain) => `https://${domain}/oauth2/default/v1/logout`,
+        scopes: 'openid profile email',
+    },
+    azure: {
+        name: 'Microsoft',
+        domain: process.env.REACT_APP_AZURE_TENANT_ID || '',
+        clientId: process.env.REACT_APP_AZURE_CLIENT_ID || '',
+        isConfigured: () => Boolean(process.env.REACT_APP_AZURE_TENANT_ID && process.env.REACT_APP_AZURE_CLIENT_ID),
+        authorizeUrl: (tenantId) => `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`,
+        tokenUrl: (tenantId) => `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+        logoutUrl: (tenantId) => `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/logout`,
+        scopes: 'openid profile email',
+    },
+    google: {
+        name: 'Google',
+        domain: '',
+        clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID || '',
+        isConfigured: () => Boolean(process.env.REACT_APP_GOOGLE_CLIENT_ID),
+        authorizeUrl: () => 'https://accounts.google.com/o/oauth2/v2/auth',
+        tokenUrl: () => 'https://oauth2.googleapis.com/token',
+        logoutUrl: () => null,
+        scopes: 'openid profile email',
+    },
+};
+
+function detectProvider() {
+    for (const [key, provider] of Object.entries(OIDC_PROVIDERS)) {
+        if (provider.isConfigured()) return { key, ...provider };
+    }
+    return null;
+}
+
+const ACTIVE_PROVIDER = detectProvider();
+const OIDC_ENABLED = Boolean(ACTIVE_PROVIDER);
+// Always use the current origin for redirect URI
 const getRedirectUri = () => `${window.location.origin}/callback`;
-const OKTA_ENABLED = Boolean(OKTA_DOMAIN && OKTA_CLIENT_ID);
 
 
-// Local fallback credentials (when Okta is not configured)
+// Local fallback credentials (when OIDC is not configured)
 // WARNING: These are baked into the JS bundle at build time and visible to anyone
 // who can view page source. Local auth is a development convenience, NOT a security
-// boundary. Use Okta SSO for production deployments.
+// boundary. Use OIDC SSO for production deployments.
 const LOCAL_USERS = [
     {
         username: process.env.REACT_APP_LOCAL_ADMIN_USERNAME || 'admin',
@@ -81,7 +121,7 @@ export function AuthProvider({ children }) {
     const [error, setError] = useState(null);
 
     const isAuthenticated = Boolean(user);
-    const authMode = OKTA_ENABLED ? 'okta' : 'local';
+    const authMode = OIDC_ENABLED ? 'oidc' : 'local';
 
     /* ---- Restore session on mount ---- */
     useEffect(() => {
@@ -89,7 +129,7 @@ export function AuthProvider({ children }) {
         const token = sessionStorage.getItem('id_token');
 
         if (stored) {
-            // For Okta sessions, also check token expiry
+            // For OIDC sessions, also check token expiry
             if (token && !isTokenExpired(token)) {
                 setUser(JSON.parse(stored));
             } else if (!token) {
@@ -105,41 +145,42 @@ export function AuthProvider({ children }) {
         setLoading(false);
     }, []);
 
-    /* ---- Handle Okta callback ---- */
-    const handleOktaCallback = useCallback(async () => {
+    /* ---- Handle OIDC callback ---- */
+    const handleOidcCallback = useCallback(async () => {
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
-        const storedState = sessionStorage.getItem('okta_state');
+        const storedState = sessionStorage.getItem('oidc_state');
         const returnedState = params.get('state');
-        const codeVerifier = sessionStorage.getItem('okta_code_verifier');
+        const codeVerifier = sessionStorage.getItem('oidc_code_verifier');
 
-        console.log('Handling Okta callback...', { code: !!code, verifier: !!codeVerifier, state: !!returnedState });
+        console.log('Handling OIDC callback...', { code: !!code, verifier: !!codeVerifier, state: !!returnedState });
 
         if (!code || !codeVerifier) {
             const msg = !code ? 'Missing authorization code' : 'Missing verifier (session may have expired)';
-            console.error('Okta callback error:', msg);
+            console.error('OIDC callback error:', msg);
             setError(msg);
             setLoading(false);
             return false;
         }
 
         if (storedState && storedState !== returnedState) {
-            console.error('Okta callback error: State mismatch', { stored: storedState, returned: returnedState });
+            console.error('OIDC callback error: State mismatch', { stored: storedState, returned: returnedState });
             setError('State mismatch — possible CSRF attack');
             setLoading(false);
             return false;
         }
 
         try {
-            const tokenResponse = await fetch(`https://${OKTA_DOMAIN}/oauth2/default/v1/token`, {
+            const tokenResponse = await fetch(ACTIVE_PROVIDER.tokenUrl(ACTIVE_PROVIDER.domain), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({
                     grant_type: 'authorization_code',
-                    client_id: OKTA_CLIENT_ID,
+                    client_id: ACTIVE_PROVIDER.clientId,
                     redirect_uri: getRedirectUri(),
                     code,
                     code_verifier: codeVerifier,
+                    scope: ACTIVE_PROVIDER.scopes,
                 }),
             });
 
@@ -152,18 +193,18 @@ export function AuthProvider({ children }) {
             const idPayload = parseJwt(tokens.id_token);
 
             const userData = {
-                name: idPayload?.name || idPayload?.preferred_username || 'Okta User',
-                email: idPayload?.email || '',
+                name: idPayload?.name || idPayload?.preferred_username || 'SSO User',
+                email: idPayload?.email || idPayload?.preferred_username || '',
                 sub: idPayload?.sub || '',
             };
 
             sessionStorage.setItem('id_token', tokens.id_token);
             sessionStorage.setItem('access_token', tokens.access_token || '');
             sessionStorage.setItem('auth_user', JSON.stringify(userData));
-            sessionStorage.removeItem('okta_state');
-            sessionStorage.removeItem('okta_code_verifier');
+            sessionStorage.removeItem('oidc_state');
+            sessionStorage.removeItem('oidc_code_verifier');
 
-            console.log('Okta token exchange successful');
+            console.log('OIDC token exchange successful');
             setUser(userData);
             setLoading(false);
 
@@ -171,35 +212,35 @@ export function AuthProvider({ children }) {
             window.history.replaceState({}, document.title, '/');
             return true;
         } catch (err) {
-            console.error('Okta token exchange failed:', err);
+            console.error('OIDC token exchange failed:', err);
             setError(`Authentication failed: ${err.message}`);
             setLoading(false);
             return false;
         }
     }, []);
 
-    /* ---- Okta Login ---- */
-    const loginWithOkta = useCallback(async () => {
+    /* ---- OIDC Login ---- */
+    const loginWithOidc = useCallback(async () => {
         const state = generateRandomString(32);
         const codeVerifier = generateRandomString(64);
         const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-        sessionStorage.setItem('okta_state', state);
-        sessionStorage.setItem('okta_code_verifier', codeVerifier);
+        sessionStorage.setItem('oidc_state', state);
+        sessionStorage.setItem('oidc_code_verifier', codeVerifier);
 
         const redirectUri = getRedirectUri();
-        const authUrl = new URL(`https://${OKTA_DOMAIN}/oauth2/default/v1/authorize`);
-        authUrl.searchParams.set('client_id', OKTA_CLIENT_ID);
+        const authUrl = new URL(ACTIVE_PROVIDER.authorizeUrl(ACTIVE_PROVIDER.domain));
+        authUrl.searchParams.set('client_id', ACTIVE_PROVIDER.clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
         authUrl.searchParams.set('response_type', 'code');
-        authUrl.searchParams.set('scope', 'openid profile email');
+        authUrl.searchParams.set('scope', ACTIVE_PROVIDER.scopes);
         authUrl.searchParams.set('state', state);
         authUrl.searchParams.set('code_challenge', codeChallenge);
         authUrl.searchParams.set('code_challenge_method', 'S256');
 
-        console.log('Starting Okta login...', {
-            domain: OKTA_DOMAIN,
-            clientId: OKTA_CLIENT_ID,
+        console.log('Starting OIDC login...', {
+            provider: ACTIVE_PROVIDER.name,
+            clientId: ACTIVE_PROVIDER.clientId,
             redirectUri: redirectUri,
             authUrl: authUrl.toString()
         });
@@ -229,11 +270,14 @@ export function AuthProvider({ children }) {
         sessionStorage.removeItem('access_token');
         setUser(null);
 
-        if (OKTA_ENABLED && idToken) {
-            const logoutUrl = new URL(`https://${OKTA_DOMAIN}/oauth2/default/v1/logout`);
-            logoutUrl.searchParams.set('id_token_hint', idToken);
-            logoutUrl.searchParams.set('post_logout_redirect_uri', window.location.origin);
-            window.location.href = logoutUrl.toString();
+        if (OIDC_ENABLED && idToken) {
+            const logoutEndpoint = ACTIVE_PROVIDER?.logoutUrl(ACTIVE_PROVIDER.domain);
+            if (logoutEndpoint) {
+                const logoutUrl = new URL(logoutEndpoint);
+                logoutUrl.searchParams.set('id_token_hint', idToken);
+                logoutUrl.searchParams.set('post_logout_redirect_uri', window.location.origin);
+                window.location.href = logoutUrl.toString();
+            }
         }
     }, []);
 
@@ -243,11 +287,12 @@ export function AuthProvider({ children }) {
         error,
         isAuthenticated,
         authMode,
-        loginWithOkta,
+        loginWithOidc,
         loginLocal,
-        handleOktaCallback,
+        handleOidcCallback,
         logout,
         clearError: () => setError(null),
+        authProvider: ACTIVE_PROVIDER?.name || null,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

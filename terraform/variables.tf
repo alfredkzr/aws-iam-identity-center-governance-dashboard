@@ -119,6 +119,32 @@ variable "okta_client_id" {
 }
 
 # -----------------------------------------------------------------------------
+# Azure AD / Entra ID SSO Configuration (for frontend auth)
+# -----------------------------------------------------------------------------
+
+variable "azure_tenant_id" {
+  description = "Azure AD tenant ID for SSO authentication (e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"
+  type        = string
+  default     = ""
+}
+
+variable "azure_client_id" {
+  description = "Azure AD OIDC application (client) ID"
+  type        = string
+  default     = ""
+}
+
+# -----------------------------------------------------------------------------
+# Google Workspace SSO Configuration (for frontend auth)
+# -----------------------------------------------------------------------------
+
+variable "google_client_id" {
+  description = "Google OIDC client ID for SSO authentication"
+  type        = string
+  default     = ""
+}
+
+# -----------------------------------------------------------------------------
 # Local Auth Configuration (when Okta is not configured)
 # -----------------------------------------------------------------------------
 

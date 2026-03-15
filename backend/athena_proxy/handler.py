@@ -37,6 +37,11 @@ ATHENA_TABLE = os.environ.get("ATHENA_TABLE", "assignments")
 ATHENA_PERMISSION_SETS_TABLE = os.environ.get("ATHENA_PERMISSION_SETS_TABLE", "permission_sets")
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
 OKTA_DOMAIN = os.environ.get("OKTA_DOMAIN", "")
+OIDC_USERINFO_URL = os.environ.get("OIDC_USERINFO_URL", "")
+
+# Backward compatibility: derive userinfo URL from OKTA_DOMAIN if OIDC_USERINFO_URL not set
+if not OIDC_USERINFO_URL and OKTA_DOMAIN:
+    OIDC_USERINFO_URL = f"https://{OKTA_DOMAIN}/oauth2/default/v1/userinfo"
 LOCAL_API_KEY = os.environ.get("LOCAL_API_KEY", "")
 
 RISK_POLICIES_KEY = "risk-policies.json"
@@ -68,18 +73,19 @@ _TOKEN_CACHE_MAX = 200
 
 
 def _validate_token(event):
-    """Validate the Okta access token by calling Okta's /userinfo endpoint.
+    """Validate the OIDC access token by calling the provider's /userinfo endpoint.
 
-    This delegates cryptographic signature verification to Okta's server,
+    This works with any OIDC provider's userinfo endpoint, delegating
+    cryptographic signature verification to the provider's server and
     requiring no external Python dependencies (uses only urllib from stdlib).
 
     Validated tokens are cached in-memory (keyed by SHA-256 hash) until their
     exp claim, so repeated requests with the same token avoid network calls.
 
     Returns (True, payload) on success or (False, error_message) on failure.
-    Skips validation entirely when OKTA_DOMAIN is not configured (local dev).
+    Skips validation entirely when OIDC_USERINFO_URL is not configured (local dev).
     """
-    if not OKTA_DOMAIN:
+    if not OIDC_USERINFO_URL:
         if not LOCAL_API_KEY:
             logger.warning("No auth mechanism configured (no OKTA_DOMAIN, no LOCAL_API_KEY)")
             return False, "Server authentication not configured"
@@ -104,7 +110,7 @@ def _validate_token(event):
 
     # Validate token via Okta's userinfo endpoint (Okta verifies the signature)
     try:
-        userinfo_url = f"https://{OKTA_DOMAIN}/oauth2/default/v1/userinfo"
+        userinfo_url = OIDC_USERINFO_URL
         req = urllib.request.Request(
             userinfo_url,
             headers={"Authorization": f"Bearer {token}"},
@@ -112,10 +118,10 @@ def _validate_token(event):
         with urllib.request.urlopen(req, timeout=5) as resp:
             userinfo = json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
-        logger.warning(f"Okta userinfo returned {e.code}")
+        logger.warning(f"OIDC userinfo returned {e.code}")
         return False, "Invalid or expired token"
     except Exception as e:
-        logger.warning(f"Okta userinfo call failed: {e}")
+        logger.warning(f"OIDC userinfo call failed: {e}")
         return False, "Token validation failed"
 
     # Extract expiry from the token for caching (best-effort decode)

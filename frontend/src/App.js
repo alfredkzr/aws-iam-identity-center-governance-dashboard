@@ -26,7 +26,7 @@ function apiFetch(url, options = {}) {
 }
 
 function AppContent() {
-    const { user, isAuthenticated, loading: authLoading, logout, handleOktaCallback } = useAuth();
+    const { user, isAuthenticated, loading: authLoading, logout, handleOidcCallback } = useAuth();
     const { theme, toggleTheme } = useTheme();
 
     // Tab state
@@ -174,9 +174,9 @@ function AppContent() {
         const params = new URLSearchParams(window.location.search);
         if (params.get('code')) {
             console.log('App: Detected "code" parameter in URL, triggering callback handler');
-            handleOktaCallback();
+            handleOidcCallback();
         }
-    }, [handleOktaCallback]);
+    }, [handleOidcCallback]);
 
     // Fetch data once authenticated
     useEffect(() => {

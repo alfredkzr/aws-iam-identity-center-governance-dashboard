@@ -23,7 +23,7 @@
 - [Dashboard Usage](#dashboard-usage)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
-- [Okta SSO Setup](#okta-sso-setup)
+- [SSO Setup](#sso-setup)
 - [Configuration Reference](#configuration-reference)
 - [Project Structure](#project-structure)
 - [Security](#security)
@@ -117,7 +117,7 @@ flowchart TD
 | **Permission Set Deep Dive** | AWS managed policies, customer managed policies, inline policies, permissions boundaries, session duration, tags, and provisioning status |
 | **Dark / Light Mode** | Theme toggle with OS preference detection and localStorage persistence |
 | **Fast-Load Cache** | Pre-rendered `summary.json` served from S3 before falling back to Athena SQL |
-| **SSO-Secured Frontend** | Okta OIDC (Authorization Code + PKCE) with server-side token validation — falls back to local auth for development |
+| **Multi-IdP SSO** | Okta, Azure AD / Entra ID, and Google Workspace OIDC (Authorization Code + PKCE) with server-side token validation — falls back to local auth for development |
 | **Interactive Tables** | Resizable columns, multi-column sorting, full-text search, pagination, and colour-coded policy labels |
 | **Export** | Download any table view to CSV or print to PDF with a single click |
 | **AWS Console Deep Links** | Permission set names link directly to their detail page in the IAM Identity Center console |
@@ -275,23 +275,23 @@ local_admin_password = "mysecurepassword"
 
 Then redeploy with `terraform apply`.
 
-> **Warning:** Always configure Okta SSO or change the default credentials before exposing the dashboard publicly. See [Okta SSO Setup](#okta-sso-setup).
+> **Warning:** Always configure SSO (Okta, Azure AD, or Google) before exposing the dashboard publicly. See [SSO Setup](#sso-setup).
 
 ---
 
-## Okta SSO Setup
+## SSO Setup
 
 > [!IMPORTANT]
-> **Without Okta configured**, the dashboard uses local auth mode with default credentials (`admin` / `admin123`). You can customise these via the `local_admin_username` and `local_admin_password` Terraform variables, but note that **local auth credentials are embedded in the client-side JS bundle** and visible to anyone who can view page source. Local auth is a development convenience, not a security boundary. **Always configure Okta for production use.**
+> **Without an identity provider configured**, the dashboard uses local auth mode with default credentials (`admin` / `admin123`). Local auth credentials are embedded in the client-side JS bundle and visible to anyone who can view page source. Local auth is a development convenience, not a security boundary. **Always configure SSO for production use.**
 
-### 1. Create an Okta Application
+The dashboard supports three OIDC identity providers. Configure **only one** at a time.
+
+### Option A: Okta
 
 1. Log into your [Okta Admin Console](https://your-org-admin.okta.com/admin/apps/active)
 2. Go to **Applications -> Create App Integration**
 3. Select **OIDC - OpenID Connect** -> **Single-Page Application (SPA)**
-4. Click **Next**
-
-### 2. Configure Redirect URIs
+4. Configure redirect URIs:
 
 | Setting | Value |
 |---------|-------|
@@ -302,36 +302,66 @@ Then redeploy with `terraform apply`.
 | **Sign-out redirect URI** (dev) | `http://localhost:3000` |
 | **Sign-out redirect URI** (prod) | `https://your-cloudfront-domain.cloudfront.net` |
 
-Click **Save**, then copy the **Client ID** from the General tab.
-
-### 3. Set Terraform Variables
-
-Add to `terraform/terraform.tfvars`:
+5. Copy the **Client ID**, then add to `terraform/terraform.tfvars`:
 
 ```hcl
 okta_domain    = "your-org.okta.com"
 okta_client_id = "0oaXXXXXXXXXXXXXXXXX"
 ```
 
-Then redeploy:
+### Option B: Azure AD / Entra ID
+
+1. Go to [Azure Portal](https://portal.azure.com) -> **Microsoft Entra ID** -> **App registrations** -> **New registration**
+2. Set **Redirect URI** (SPA): `https://your-cloudfront-domain.cloudfront.net/callback`
+3. Under **Authentication**, enable **Access tokens** and **ID tokens** under Implicit grant
+4. Copy the **Application (client) ID** and **Directory (tenant) ID**, then add to `terraform/terraform.tfvars`:
+
+```hcl
+azure_tenant_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+azure_client_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+```
+
+### Option C: Google Workspace
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) -> **APIs & Services** -> **Credentials** -> **Create OAuth client ID**
+2. Set **Application type** to **Web application**
+3. Add **Authorized redirect URIs**: `https://your-cloudfront-domain.cloudfront.net/callback`
+4. Copy the **Client ID**, then add to `terraform/terraform.tfvars`:
+
+```hcl
+google_client_id = "xxxxxxxxxxxx-xxx.apps.googleusercontent.com"
+```
+
+> **Note:** Google does not support RP-initiated logout. Clicking "Sign out" will clear the local session but will not log you out of Google.
+
+### Deploy & Verify
+
+After setting your IdP variables, redeploy:
 
 ```bash
 cd terraform && terraform apply
 ```
 
-The redirect URI is auto-derived from the CloudFront domain — no manual configuration needed in Terraform. After deploying, add the production callback URL (`https://<cloudfront-domain>/callback`) to your Okta app's **Sign-in redirect URIs**.
+The redirect URI is auto-derived from the CloudFront domain. After deploying, add the production callback URL (`https://<cloudfront-domain>/callback`) to your IdP's redirect URI configuration.
 
-### 4. Local Development with Okta
+### Local Development with SSO
 
-Create `frontend/.env`:
+Create `frontend/.env` with your provider's variables:
 
 ```bash
+# Okta
 REACT_APP_OKTA_DOMAIN=your-org.okta.com
 REACT_APP_OKTA_CLIENT_ID=0oaXXXXXXXXXXXXXXXXX
-REACT_APP_OKTA_REDIRECT_URI=http://localhost:3000/callback
+
+# OR Azure AD
+REACT_APP_AZURE_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+REACT_APP_AZURE_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# OR Google
+REACT_APP_GOOGLE_CLIENT_ID=xxxxxxxxxxxx-xxx.apps.googleusercontent.com
 ```
 
-**How it works:** The frontend uses Authorization Code + PKCE flow. Tokens are stored in `sessionStorage`. The backend validates tokens by calling Okta's `/oauth2/default/v1/userinfo` endpoint (with in-memory caching). Tokens are passed via the `X-Auth-Token` header instead of `Authorization` because CloudFront OAC replaces the `Authorization` header with its own SigV4 signature.
+**How it works:** The frontend uses Authorization Code + PKCE flow with auto-detected provider. Tokens are stored in `sessionStorage`. The backend validates tokens by calling the provider's OIDC userinfo endpoint (with in-memory caching). Tokens are passed via the `X-Auth-Token` header instead of `Authorization` because CloudFront OAC replaces the `Authorization` header with its own SigV4 signature.
 
 ---
 
@@ -354,8 +384,11 @@ REACT_APP_OKTA_REDIRECT_URI=http://localhost:3000/callback
 | `environment` | `string` | `"production"` | Environment tag |
 | `okta_domain` | `string` | `""` | Okta domain (e.g. `your-org.okta.com`) |
 | `okta_client_id` | `string` | `""` | Okta OIDC client ID |
-| `local_admin_username` | `string` | `"admin"` | Username for local dashboard login (when Okta is not configured) |
-| `local_admin_password` | `string` | `"admin123"` | Password for local dashboard login (when Okta is not configured, sensitive) |
+| `azure_tenant_id` | `string` | `""` | Azure AD tenant ID |
+| `azure_client_id` | `string` | `""` | Azure AD OIDC client ID |
+| `google_client_id` | `string` | `""` | Google OIDC client ID |
+| `local_admin_username` | `string` | `"admin"` | Username for local dashboard login (when no IdP is configured) |
+| `local_admin_password` | `string` | `"admin123"` | Password for local dashboard login (when no IdP is configured) |
 
 ### Schedule & Lifecycle
 
@@ -406,7 +439,7 @@ aws-iam-identity-center-security-governance-dashboard/
 │       ├── App.js                     # Main app (tabs, data fetching, demo data fallback)
 │       ├── index.css                  # Design system (CSS custom properties, light + dark themes)
 │       ├── auth/
-│       │   └── AuthContext.js         # Okta OIDC + PKCE + local auth fallback
+│       │   └── AuthContext.js         # Multi-IdP OIDC (Okta/Azure AD/Google) + PKCE + local auth fallback
 │       ├── hooks/
 │       │   └── useTheme.js            # Dark/light mode hook (localStorage + OS preference)
 │       └── components/
@@ -434,7 +467,7 @@ The default deployment includes these security controls out of the box:
 | **Public Access Blocked** | All S3 buckets block public ACLs, public policies, and restrict public access |
 | **CloudFront OAC** | Origin Access Control secures both S3 and Lambda Function URL origins with SigV4 |
 | **AWS_IAM Auth** | Lambda Function URL requires IAM authorization — no anonymous access |
-| **Okta Token Validation** | Backend validates tokens against Okta's userinfo endpoint (with in-memory cache) |
+| **OIDC Token Validation** | Backend validates tokens against the configured IdP's userinfo endpoint (with in-memory cache) |
 | **SQL Injection Prevention** | Table names validated with regex `^[a-zA-Z_][a-zA-Z0-9_]*$` |
 | **Query Type Allowlist** | API only accepts: `all`, `summary`, `dates`, `permission_sets`, `permission_sets_dates`, `risk_policies`, `save_risk_policies` |
 | **Least-Privilege IAM** | All Lambda roles scoped to exactly the required actions and resources |
@@ -447,7 +480,7 @@ The default deployment includes these security controls out of the box:
 
 | Action | Why | How |
 |--------|-----|-----|
-| **Configure Okta SSO** | Local auth credentials are embedded in the JS bundle and visible to anyone who can view page source — they are a development convenience, not a security boundary. Always use a real IdP for production. | See [Okta SSO Setup](#okta-sso-setup) |
+| **Configure SSO** | Local auth credentials are embedded in the JS bundle and visible to anyone who can view page source — they are a development convenience, not a security boundary. Always use a real IdP for production. | See [SSO Setup](#sso-setup) — supports Okta, Azure AD, and Google |
 | **Attach AWS WAFv2** | Protect against DDoS, bots, OWASP Top 10 | Create `aws_wafv2_web_acl` with AWS Managed Rules, associate with CloudFront |
 | **Add custom domain + TLS** | Replace `*.cloudfront.net` with your branded domain | ACM certificate in `us-east-1` + Route 53 alias + `viewer_certificate` block |
 | **Enable geo-restriction** | Limit access to operating regions | `restrictions.geo_restriction` in CloudFront |
@@ -668,7 +701,7 @@ npm install
 npm start              # Dev server at http://localhost:3000
 ```
 
-> Without Okta env vars, local auth is used. Default credentials: `admin` / `admin123`. Customise via `REACT_APP_LOCAL_ADMIN_USERNAME` / `REACT_APP_LOCAL_ADMIN_PASSWORD` in `frontend/.env` (see `frontend/.env.example`).
+> Without SSO env vars, local auth is used. Default credentials: `admin` / `admin123`. Customise via `REACT_APP_LOCAL_ADMIN_USERNAME` / `REACT_APP_LOCAL_ADMIN_PASSWORD` in `frontend/.env`. SSO supports Okta, Azure AD, and Google (see `frontend/.env.example`).
 
 **Backend (Python Lambdas):**
 

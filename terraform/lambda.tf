@@ -9,6 +9,15 @@ resource "random_password" "api_key" {
 
 locals {
   effective_api_key = var.local_api_key != "" ? var.local_api_key : random_password.api_key.result
+
+  oidc_userinfo_url = (
+    var.okta_domain != "" ? "https://${var.okta_domain}/oauth2/default/v1/userinfo" :
+    var.azure_tenant_id != "" ? "https://graph.microsoft.com/oidc/userinfo" :
+    var.google_client_id != "" ? "https://openidconnect.googleapis.com/v1/userinfo" :
+    ""
+  )
+
+  oidc_enabled = local.oidc_userinfo_url != ""
 }
 
 # -----------------------------------------------------------------------------
@@ -83,7 +92,8 @@ resource "aws_lambda_function" "athena_proxy" {
       ATHENA_TABLE                 = "assignments"
       ATHENA_PERMISSION_SETS_TABLE = "permission_sets"
       OKTA_DOMAIN                  = var.okta_domain
-      LOCAL_API_KEY                = var.okta_domain == "" ? local.effective_api_key : ""
+      OIDC_USERINFO_URL            = local.oidc_userinfo_url
+      LOCAL_API_KEY                = local.oidc_enabled ? "" : local.effective_api_key
     }
   }
 }

@@ -297,12 +297,12 @@
     box-shadow: 0 4px 12px rgba(0, 115, 187, 0.25);
 }
 
-.login-card__btn--okta {
+.login-card__btn--sso {
     background: var(--aws-blue, #0073bb);
     color: #fff;
 }
 
-.login-card__btn--okta:hover {
+.login-card__btn--sso:hover {
     background: var(--aws-blue-hover, #005a92);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 115, 187, 0.25);

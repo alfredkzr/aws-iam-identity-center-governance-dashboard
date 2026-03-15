@@ -56,6 +56,20 @@ identity_store_id = "d-xxxxxxxxxx"
 # Note: okta_redirect_uri is auto-derived from the CloudFront domain — no need to set it.
 
 # -------------------------------------------------------
+# OPTIONAL — Azure AD / Entra ID SSO (frontend authentication)
+# -------------------------------------------------------
+# NOTE: Configure only ONE identity provider (Okta, Azure AD, or Google).
+
+# azure_tenant_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+# azure_client_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# -------------------------------------------------------
+# OPTIONAL — Google Workspace SSO (frontend authentication)
+# -------------------------------------------------------
+
+# google_client_id = "xxxxxxxxxxxx-xxx.apps.googleusercontent.com"
+
+# -------------------------------------------------------
 # OPTIONAL — Local Auth (when Okta is not configured)
 # -------------------------------------------------------
 
