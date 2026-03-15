@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import './SecurityTab.css';
 
 /* ================================================================
@@ -67,7 +67,39 @@ export default function SecurityTab({
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState(null);
 
+    /* ---- Pagination state ---- */
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+
+    /* ---- Export state ---- */
+    const [exportOpen, setExportOpen] = useState(false);
+    const exportRef = useRef(null);
+
     const currentRules = editingRules || riskPolicies?.rules || [];
+
+    const totalPages = Math.max(1, Math.ceil(currentRules.length / pageSize));
+
+    const paginatedRules = useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize;
+        return currentRules.slice(startIndex, startIndex + pageSize);
+    }, [currentRules, currentPage, pageSize]);
+
+    /* Reset page when toggling edit mode */
+    const isEditing = editingRules !== null;
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [isEditing]);
+
+    /* Close export dropdown on outside click */
+    useEffect(() => {
+        const handleClick = (e) => {
+            if (exportRef.current && !exportRef.current.contains(e.target)) {
+                setExportOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, []);
 
     const startEditing = useCallback(() => {
         setEditingRules([...(riskPolicies?.rules || [])]);
@@ -80,22 +112,38 @@ export default function SecurityTab({
     };
 
     const addRule = () => {
-        setEditingRules(prev => [
-            ...(prev || []),
-            { type: 'managed_policy_name', pattern: '', match: 'exact', risk: 'medium', reason: '' },
-        ]);
-    };
-
-    const updateRule = (index, field, value) => {
         setEditingRules(prev => {
-            const updated = [...prev];
-            updated[index] = { ...updated[index], [field]: value };
+            const updated = [
+                ...(prev || []),
+                { type: 'managed_policy_name', pattern: '', match: 'exact', risk: 'medium', reason: '' },
+            ];
+            // Navigate to last page to show the new rule
+            const newTotalPages = Math.max(1, Math.ceil(updated.length / pageSize));
+            setCurrentPage(newTotalPages);
             return updated;
         });
     };
 
-    const deleteRule = (index) => {
-        setEditingRules(prev => prev.filter((_, i) => i !== index));
+    const updateRule = (pageIndex, field, value) => {
+        const globalIndex = (currentPage - 1) * pageSize + pageIndex;
+        setEditingRules(prev => {
+            const updated = [...prev];
+            updated[globalIndex] = { ...updated[globalIndex], [field]: value };
+            return updated;
+        });
+    };
+
+    const deleteRule = (pageIndex) => {
+        const globalIndex = (currentPage - 1) * pageSize + pageIndex;
+        setEditingRules(prev => {
+            const updated = prev.filter((_, i) => i !== globalIndex);
+            // Adjust page if we deleted the last item on the current page
+            const newTotalPages = Math.max(1, Math.ceil(updated.length / pageSize));
+            if (currentPage > newTotalPages) {
+                setCurrentPage(newTotalPages);
+            }
+            return updated;
+        });
     };
 
     const saveRules = async () => {
@@ -114,11 +162,43 @@ export default function SecurityTab({
 
     const resetToDefaults = () => {
         if (window.confirm('Reset all rules to industry-standard defaults? This will discard any custom rules.')) {
-            // Fetch defaults from API will happen on save — for now clear editing
             setEditingRules(null);
-            onSaveRiskPolicies(null); // null signals "delete custom, use defaults"
+            onSaveRiskPolicies(null);
             setSaveMessage({ type: 'success', text: 'Reset to defaults. Run a new crawl to apply.' });
         }
+    };
+
+    /* ---- Export functions ---- */
+    const exportRulesCSV = () => {
+        const headers = ['Type', 'Pattern', 'Match Type', 'Risk Level', 'Reason'];
+        const rows = currentRules.map(r => [
+            r.type || '',
+            r.pattern || '',
+            r.match || '',
+            r.risk || '',
+            r.reason || '',
+        ]);
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(r => r.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `risk-policy-rules-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        setExportOpen(false);
+    };
+
+    const exportRulesPDF = () => {
+        setExportOpen(false);
+        window.print();
     };
 
     if (loading) {
@@ -234,6 +314,42 @@ export default function SecurityTab({
                         </p>
                     </div>
                     <div className="security-panel__actions">
+                        {/* Export dropdown */}
+                        <div className="security-export-dropdown" ref={exportRef}>
+                            <button className="security-export-dropdown__trigger" onClick={() => setExportOpen(!exportOpen)}>
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M8 1a.5.5 0 01.5.5v9.793l3.146-3.147a.5.5 0 01.708.708l-4 4a.5.5 0 01-.708 0l-4-4a.5.5 0 01.708-.708L7.5 11.293V1.5A.5.5 0 018 1z"/>
+                                    <path d="M2 13.5a.5.5 0 01.5-.5h11a.5.5 0 010 1h-11a.5.5 0 01-.5-.5z"/>
+                                </svg>
+                                <span>Export</span>
+                                <svg className="security-export-dropdown__caret" width="8" height="8" viewBox="0 0 10 10" fill="none">
+                                    <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                            </button>
+                            {exportOpen && (
+                                <div className="security-export-dropdown__menu">
+                                    <button className="security-export-dropdown__item" onClick={exportRulesCSV}>
+                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M14 14.5H2a1 1 0 01-1-1v-11a1 1 0 011-1h5l2 2h5a1 1 0 011 1v9a1 1 0 01-1 1z"/>
+                                        </svg>
+                                        <div>
+                                            <div className="security-export-dropdown__item-title">Download CSV</div>
+                                            <div className="security-export-dropdown__item-desc">Comma-separated spreadsheet</div>
+                                        </div>
+                                    </button>
+                                    <button className="security-export-dropdown__item" onClick={exportRulesPDF}>
+                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M5 1a2 2 0 00-2 2v10a2 2 0 002 2h6a2 2 0 002-2V5l-4-4H5zm4 0v3a1 1 0 001 1h3"/>
+                                        </svg>
+                                        <div>
+                                            <div className="security-export-dropdown__item-title">Print / Save as PDF</div>
+                                            <div className="security-export-dropdown__item-desc">Opens print dialog</div>
+                                        </div>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                         {editingRules === null ? (
                             <button className="security-btn security-btn--primary" onClick={startEditing}>
                                 <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
@@ -264,7 +380,7 @@ export default function SecurityTab({
                     </div>
                 )}
 
-                <div className="security-panel__body security-panel__body--scroll">
+                <div className="security-panel__body">
                     <table className="security-rules-table">
                         <thead>
                             <tr>
@@ -277,7 +393,7 @@ export default function SecurityTab({
                             </tr>
                         </thead>
                         <tbody>
-                            {currentRules.map((rule, i) => (
+                            {paginatedRules.map((rule, i) => (
                                 <tr key={i}>
                                     <td>
                                         {editingRules !== null ? (
@@ -360,6 +476,48 @@ export default function SecurityTab({
                         </button>
                     )}
                 </div>
+
+                {/* Pagination controls */}
+                {currentRules.length > 0 && (
+                    <div className="security-rules-pagination">
+                        <div className="pagination__left">
+                            <label>Rules per page</label>
+                            <select
+                                className="pagination__select"
+                                value={pageSize}
+                                onChange={(e) => {
+                                    setPageSize(Number(e.target.value));
+                                    setCurrentPage(1);
+                                }}
+                            >
+                                <option value={10}>10</option>
+                                <option value={25}>25</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
+                        <div className="pagination__right">
+                            <span className="pagination__info">
+                                {((currentPage - 1) * pageSize) + 1}–{Math.min(currentPage * pageSize, currentRules.length)} of {currentRules.length} rules
+                            </span>
+                            <div className="pagination__buttons">
+                                <button className="pagination__btn" disabled={currentPage === 1} onClick={() => setCurrentPage(1)} title="First page">
+                                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8.354 1.646a.5.5 0 010 .708L2.707 8l5.647 5.646a.5.5 0 01-.708.708l-6-6a.5.5 0 010-.708l6-6a.5.5 0 01.708 0z"/><path d="M12.354 1.646a.5.5 0 010 .708L6.707 8l5.647 5.646a.5.5 0 01-.708.708l-6-6a.5.5 0 010-.708l6-6a.5.5 0 01.708 0z"/></svg>
+                                </button>
+                                <button className="pagination__btn" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} title="Previous page">
+                                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11.354 1.646a.5.5 0 010 .708L5.707 8l5.647 5.646a.5.5 0 01-.708.708l-6-6a.5.5 0 010-.708l6-6a.5.5 0 01.708 0z"/></svg>
+                                </button>
+                                <span className="pagination__current-page">{currentPage}</span>
+                                <button className="pagination__btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} title="Next page">
+                                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 1.646a.5.5 0 01.708 0l6 6a.5.5 0 010 .708l-6 6a.5.5 0 01-.708-.708L10.293 8 4.646 2.354a.5.5 0 010-.708z"/></svg>
+                                </button>
+                                <button className="pagination__btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)} title="Last page">
+                                    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M3.646 1.646a.5.5 0 01.708 0l6 6a.5.5 0 010 .708l-6 6a.5.5 0 01-.708-.708L9.293 8 3.646 2.354a.5.5 0 010-.708z"/><path d="M7.646 1.646a.5.5 0 01.708 0l6 6a.5.5 0 010 .708l-6 6a.5.5 0 01-.708-.708L13.293 8 7.646 2.354a.5.5 0 010-.708z"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </section>
         </div>
     );

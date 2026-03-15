@@ -2,8 +2,16 @@
    SecurityTab — Risk Overview & Policy Editor
    ================================================================ */
 
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
 .security-container {
-    padding: 0 0 2rem;
+    padding: var(--space-xxl, 2rem) var(--space-xl, 1.5rem);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl, 1.5rem);
 }
 
 /* ---- Risk Stats Cards ---- */
@@ -11,7 +19,7 @@
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 1rem;
-    margin-bottom: 1.5rem;
+    animation: fadeUp 0.4s ease-out;
 }
 
 .security-stat-card {
@@ -61,8 +69,8 @@
     background: #fff;
     border: 1px solid #eaeded;
     border-radius: 8px;
-    margin-bottom: 1.5rem;
     overflow: hidden;
+    animation: fadeUp 0.4s ease-out;
 }
 
 .security-panel__header {
@@ -99,11 +107,6 @@
 
 .security-panel__body {
     padding: 0;
-}
-
-.security-panel__body--scroll {
-    max-height: 600px;
-    overflow-y: auto;
 }
 
 .security-panel__empty {
@@ -298,9 +301,6 @@
     letter-spacing: 0.5px;
     border-bottom: 1px solid #eaeded;
     background: #fafafa;
-    position: sticky;
-    top: 0;
-    z-index: 1;
 }
 
 .security-rules-table td {
@@ -351,6 +351,163 @@
     color: #545b64;
 }
 
+/* ---- Pagination ---- */
+.security-rules-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: #fff;
+    border-top: 1px solid #eaeded;
+    font-size: 0.78rem;
+    color: #687078;
+}
+
+.security-rules-pagination .pagination__left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.security-rules-pagination .pagination__select {
+    background: #fff;
+    border: 1px solid #d5dbdb;
+    border-radius: 6px;
+    padding: 2px 24px 2px 8px;
+    font-size: 0.78rem;
+    color: #16191f;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 10 10' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 3.5L5 6.5L8 3.5' stroke='%23545b64' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+}
+
+.security-rules-pagination .pagination__select:focus {
+    border-color: #0073bb;
+}
+
+.security-rules-pagination .pagination__right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.security-rules-pagination .pagination__info {
+    font-weight: 500;
+}
+
+.security-rules-pagination .pagination__buttons {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.security-rules-pagination .pagination__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: 1px solid #d5dbdb;
+    border-radius: 4px;
+    color: #16191f;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.security-rules-pagination .pagination__btn:hover:not(:disabled) {
+    background: #f2f3f3;
+    border-color: #0073bb;
+}
+
+.security-rules-pagination .pagination__btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: #fafafa;
+    border-color: transparent;
+}
+
+.security-rules-pagination .pagination__current-page {
+    padding: 0 8px;
+    font-weight: 600;
+    color: #16191f;
+    font-size: 0.78rem;
+}
+
+/* ---- Export Dropdown ---- */
+.security-export-dropdown {
+    position: relative;
+}
+
+.security-export-dropdown__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 14px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    border: 1px solid #d5dbdb;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #fff;
+    color: #16191f;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.security-export-dropdown__trigger:hover {
+    background: #fafafa;
+}
+
+.security-export-dropdown__caret {
+    margin-left: 2px;
+}
+
+.security-export-dropdown__menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: #fff;
+    border: 1px solid #eaeded;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 20;
+    min-width: 220px;
+    overflow: hidden;
+}
+
+.security-export-dropdown__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.78rem;
+    color: #16191f;
+    transition: background 0.1s;
+}
+
+.security-export-dropdown__item:hover {
+    background: #f2f3f3;
+}
+
+.security-export-dropdown__item-title {
+    font-weight: 500;
+}
+
+.security-export-dropdown__item-desc {
+    font-size: 0.7rem;
+    color: #687078;
+}
+
 /* ---- Loading ---- */
 .security-loading {
     display: flex;
@@ -384,5 +541,14 @@
     .security-panel__header {
         flex-direction: column;
         gap: 12px;
+    }
+}
+
+/* ---- Print ---- */
+@media print {
+    .security-panel__actions,
+    .security-rules-pagination,
+    .security-export-dropdown {
+        display: none !important;
     }
 }
