@@ -202,6 +202,10 @@ function AppContent() {
                     setRiskPolicies(result.policies || null);
                     setRiskSource(result.source || 'default');
                 }
+            } else {
+                // Demo mode — load demo risk policies
+                setRiskPolicies(getDemoRiskPolicies());
+                setRiskSource('default');
             }
         } catch (err) {
             console.error('Failed to fetch risk policies:', err);
@@ -213,10 +217,8 @@ function AppContent() {
     const saveRiskPolicies = useCallback(async (policies) => {
         if (API_ENDPOINT) {
             if (policies === null) {
-                // Reset to defaults — delete the custom file by saving defaults
                 const response = await apiFetch(`${API_ENDPOINT}?type=risk_policies`);
                 const result = await response.json();
-                // Just re-fetch to get defaults
                 setRiskPolicies(result.policies || null);
                 setRiskSource('default');
                 return;
@@ -233,6 +235,15 @@ function AppContent() {
             const result = await response.json();
             setRiskPolicies(result.policies || policies);
             setRiskSource('custom');
+        } else {
+            // Demo mode — update local state only
+            if (policies === null) {
+                setRiskPolicies(getDemoRiskPolicies());
+                setRiskSource('default');
+            } else {
+                setRiskPolicies(policies);
+                setRiskSource('custom');
+            }
         }
     }, []);
 
@@ -310,7 +321,7 @@ function AppContent() {
                         </svg>
                         Security
                     </button>
-                    {AUDIT_TRAIL_ENABLED && (
+                    {(AUDIT_TRAIL_ENABLED || !API_ENDPOINT) && (
                         <button
                             className={`tab-nav__tab ${activeTab === 'audit_trail' ? 'tab-nav__tab--active' : ''}`}
                             onClick={() => setActiveTab('audit_trail')}
@@ -362,9 +373,9 @@ function AppContent() {
                         onRefresh={() => fetchPermissionSets(psSelectedDate, true)}
                     />
                 ) : activeTab === 'audit_trail' ? (
-                    <AuditTrailTab apiFetch={apiFetch} apiEndpoint={API_ENDPOINT} />
+                    <AuditTrailTab apiFetch={apiFetch} apiEndpoint={API_ENDPOINT} demoEvents={!API_ENDPOINT ? getDemoAuditTrailEvents() : undefined} />
                 ) : activeTab === 'settings' ? (
-                    <SettingsTab auditTrailEnabled={AUDIT_TRAIL_ENABLED} theme={theme} onToggleTheme={toggleTheme} />
+                    <SettingsTab auditTrailEnabled={AUDIT_TRAIL_ENABLED || !API_ENDPOINT} theme={theme} onToggleTheme={toggleTheme} />
                 ) : (
                     <SecurityTab
                         permissionSetsData={psData}
@@ -501,7 +512,11 @@ function getDemoPermissionSetsData() {
             inline_policy: '',
             permissions_boundary: null,
             tags: [{ Key: 'env', Value: 'production' }, { Key: 'team', Value: 'platform' }],
-            provisioned_accounts: 120
+            provisioned_accounts: 120,
+            risk_level: 'critical',
+            risk_reasons: [
+                { rule: 'AdministratorAccess', risk: 'critical', reason: 'Full administrative access to all AWS services and resources' }
+            ]
         },
         {
             name: 'PowerUserAccess',
@@ -526,7 +541,11 @@ function getDemoPermissionSetsData() {
                 managed_policy_arn: 'arn:aws:iam::aws:policy/PowerUserAccess'
             },
             tags: [{ Key: 'env', Value: 'production' }],
-            provisioned_accounts: 85
+            provisioned_accounts: 85,
+            risk_level: 'high',
+            risk_reasons: [
+                { rule: 'PowerUserAccess', risk: 'high', reason: 'Near-full access — can modify most AWS resources except IAM' }
+            ]
         },
         {
             name: 'ReadOnlyAccess',
@@ -542,7 +561,9 @@ function getDemoPermissionSetsData() {
             inline_policy: '',
             permissions_boundary: null,
             tags: [],
-            provisioned_accounts: 120
+            provisioned_accounts: 120,
+            risk_level: 'low',
+            risk_reasons: []
         },
         {
             name: 'SecurityAudit',
@@ -573,7 +594,9 @@ function getDemoPermissionSetsData() {
             }),
             permissions_boundary: null,
             tags: [{ Key: 'compliance', Value: 'required' }, { Key: 'team', Value: 'security' }],
-            provisioned_accounts: 45
+            provisioned_accounts: 45,
+            risk_level: 'low',
+            risk_reasons: []
         },
         {
             name: 'BillingAccess',
@@ -588,7 +611,9 @@ function getDemoPermissionSetsData() {
             inline_policy: '',
             permissions_boundary: null,
             tags: [{ Key: 'team', Value: 'finance' }],
-            provisioned_accounts: 3
+            provisioned_accounts: 3,
+            risk_level: 'low',
+            risk_reasons: []
         },
         {
             name: 'NetworkAdministrator',
@@ -607,7 +632,11 @@ function getDemoPermissionSetsData() {
                 customer_managed_policy_reference: { name: 'network-boundary-policy', path: '/' }
             },
             tags: [{ Key: 'team', Value: 'networking' }, { Key: 'env', Value: 'all' }],
-            provisioned_accounts: 12
+            provisioned_accounts: 12,
+            risk_level: 'medium',
+            risk_reasons: [
+                { rule: 'NetworkAdministrator', risk: 'medium', reason: 'Full control over VPC, Route53, and network infrastructure' }
+            ]
         },
         {
             name: 'DatabaseAdministrator',
@@ -631,7 +660,12 @@ function getDemoPermissionSetsData() {
             }),
             permissions_boundary: null,
             tags: [{ Key: 'team', Value: 'data' }],
-            provisioned_accounts: 8
+            provisioned_accounts: 8,
+            risk_level: 'high',
+            risk_reasons: [
+                { rule: 'AmazonRDSFullAccess', risk: 'high', reason: 'Full access to RDS — can delete production databases' },
+                { rule: 'AmazonDynamoDBFullAccess', risk: 'high', reason: 'Full access to DynamoDB — can delete tables and data' }
+            ]
         },
         {
             name: 'DeveloperAccess',
@@ -664,7 +698,11 @@ function getDemoPermissionSetsData() {
                 managed_policy_arn: 'arn:aws:iam::aws:policy/PowerUserAccess'
             },
             tags: [{ Key: 'team', Value: 'engineering' }, { Key: 'env', Value: 'dev' }, { Key: 'tier', Value: 'standard' }],
-            provisioned_accounts: 30
+            provisioned_accounts: 30,
+            risk_level: 'high',
+            risk_reasons: [
+                { rule: 'PowerUserAccess', risk: 'high', reason: 'Developers have near-full access — only IAM admin denied' }
+            ]
         },
         {
             name: 'ViewOnlyAccess',
@@ -679,7 +717,9 @@ function getDemoPermissionSetsData() {
             inline_policy: '',
             permissions_boundary: null,
             tags: [],
-            provisioned_accounts: 0
+            provisioned_accounts: 0,
+            risk_level: 'low',
+            risk_reasons: []
         },
         {
             name: 'SupportUser',
@@ -694,7 +734,9 @@ function getDemoPermissionSetsData() {
             inline_policy: '',
             permissions_boundary: null,
             tags: [{ Key: 'team', Value: 'support' }],
-            provisioned_accounts: 5
+            provisioned_accounts: 5,
+            risk_level: 'low',
+            risk_reasons: []
         }
     ];
 
@@ -709,6 +751,171 @@ function getDemoPermissionSetsData() {
             }
         }
     };
+}
+
+/**
+ * Demo risk policies matching backend/worker/default_risk_policies.py
+ */
+function getDemoRiskPolicies() {
+    return {
+        version: 1,
+        rules: [
+            { type: 'managed_policy_name', pattern: 'AdministratorAccess', risk: 'critical', reason: 'Full administrative access to all AWS services and resources' },
+            { type: 'managed_policy_name', pattern: 'PowerUserAccess', risk: 'high', reason: 'Near-full access — can modify most AWS resources except IAM' },
+            { type: 'managed_policy_name', pattern: 'IAMFullAccess', risk: 'critical', reason: 'Can create and manage all IAM resources including admin users' },
+            { type: 'managed_policy_name', pattern: 'AmazonS3FullAccess', risk: 'high', reason: 'Can read, write, and delete all S3 data across the account' },
+            { type: 'managed_policy_name', pattern: 'AmazonEC2FullAccess', risk: 'medium', reason: 'Can launch, modify, and terminate EC2 instances' },
+            { type: 'managed_policy_name', pattern: 'AmazonRDSFullAccess', risk: 'high', reason: 'Full access to RDS — can delete production databases' },
+            { type: 'managed_policy_name', pattern: 'AmazonDynamoDBFullAccess', risk: 'high', reason: 'Full access to DynamoDB — can delete tables and data' },
+            { type: 'managed_policy_name', pattern: 'AWSLambda_FullAccess', risk: 'medium', reason: 'Can create and invoke Lambda functions with any IAM role' },
+            { type: 'managed_policy_name', pattern: 'NetworkAdministrator', risk: 'medium', reason: 'Full control over VPC, Route53, and network infrastructure' },
+            { type: 'managed_policy_name', pattern: 'AmazonVPCFullAccess', risk: 'medium', reason: 'Can modify VPC configuration including security groups and NACLs' },
+            { type: 'inline_policy_action', pattern: '*', risk: 'critical', reason: 'Wildcard action grants unrestricted access to all AWS APIs' },
+            { type: 'inline_policy_action', pattern: 'iam:*', risk: 'critical', reason: 'Full IAM control — can escalate privileges and create backdoors' },
+            { type: 'inline_policy_action', pattern: 'sts:AssumeRole', risk: 'medium', reason: 'Can assume other IAM roles — potential for privilege escalation' },
+            { type: 'inline_policy_action', pattern: 's3:*', risk: 'high', reason: 'Unrestricted S3 access including delete operations on all buckets' },
+            { type: 'inline_policy_action', pattern: 'kms:*', risk: 'high', reason: 'Full KMS access — can manage encryption keys and decrypt any data' },
+        ]
+    };
+}
+
+/**
+ * Demo audit trail events for when API is not configured.
+ */
+function getDemoAuditTrailEvents() {
+    const now = new Date();
+    const events = [];
+    const actors = [
+        'arn:aws:sts::465065489655:assumed-role/AWSReservedSSO_AdministratorAccess_abc123/alice.johnson@example.com',
+        'arn:aws:sts::465065489655:assumed-role/AWSReservedSSO_AdministratorAccess_abc123/bob.smith@example.com',
+        'arn:aws:sts::465065489655:assumed-role/AWSReservedSSO_SecurityAudit_def456/carol.chen@example.com',
+        'arn:aws:sts::465065489655:assumed-role/AWSReservedSSO_PowerUserAccess_ghi789/dave.wilson@example.com',
+        'arn:aws:iam::465065489655:user/terraform-ci',
+    ];
+    const ips = ['203.0.113.10', '198.51.100.42', '192.0.2.88', '10.0.1.55', 'AWS Internal'];
+    const accounts = ['000000000001', '000000000002', '000000000003', '000000000010', '000000000025'];
+    const accountNames = ['Production-1', 'Staging-2', 'Development-3', 'Security-10', 'Sandbox-25'];
+    const permSets = ['AdministratorAccess', 'PowerUserAccess', 'ReadOnlyAccess', 'DeveloperAccess', 'SecurityAudit'];
+    const principals = [
+        { name: 'Platform-Engineering', type: 'GROUP' },
+        { name: 'alice.johnson', type: 'USER' },
+        { name: 'Security-Team', type: 'GROUP' },
+        { name: 'bob.smith', type: 'USER' },
+        { name: 'DevOps-Team', type: 'GROUP' },
+    ];
+
+    const templates = [
+        {
+            eventname: 'CreateAccountAssignment',
+            mkParams: (ps, acct, principal) => JSON.stringify({
+                InstanceArn: 'arn:aws:sso:::instance/ssoins-xxx',
+                TargetId: acct, TargetType: 'AWS_ACCOUNT',
+                PermissionSetArn: `arn:aws:sso:::permissionSet/ssoins-xxx/ps-${ps.toLowerCase()}`,
+                PrincipalType: principal.type, PrincipalId: `d-xxxx|${principal.name}`,
+            }),
+            mkResolved: (ps, acct, acctName, principal) => ({
+                permission_set: ps, account: `${acctName} (${acct})`,
+                principal: principal.name, principal_type: principal.type,
+            }),
+        },
+        {
+            eventname: 'DeleteAccountAssignment',
+            mkParams: (ps, acct, principal) => JSON.stringify({
+                InstanceArn: 'arn:aws:sso:::instance/ssoins-xxx',
+                TargetId: acct, TargetType: 'AWS_ACCOUNT',
+                PermissionSetArn: `arn:aws:sso:::permissionSet/ssoins-xxx/ps-${ps.toLowerCase()}`,
+                PrincipalType: principal.type, PrincipalId: `d-xxxx|${principal.name}`,
+            }),
+            mkResolved: (ps, acct, acctName, principal) => ({
+                permission_set: ps, account: `${acctName} (${acct})`,
+                principal: principal.name, principal_type: principal.type,
+            }),
+        },
+        {
+            eventname: 'UpdatePermissionSet',
+            mkParams: (ps) => JSON.stringify({
+                InstanceArn: 'arn:aws:sso:::instance/ssoins-xxx',
+                PermissionSetArn: `arn:aws:sso:::permissionSet/ssoins-xxx/ps-${ps.toLowerCase()}`,
+                Description: `Updated description for ${ps}`,
+                SessionDuration: 'PT4H',
+            }),
+            mkResolved: (ps) => ({ permission_set: ps }),
+        },
+        {
+            eventname: 'AttachManagedPolicyToPermissionSet',
+            mkParams: (ps) => JSON.stringify({
+                InstanceArn: 'arn:aws:sso:::instance/ssoins-xxx',
+                PermissionSetArn: `arn:aws:sso:::permissionSet/ssoins-xxx/ps-${ps.toLowerCase()}`,
+                ManagedPolicyArn: 'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess',
+            }),
+            mkResolved: (ps) => ({ permission_set: ps, policy: 'AmazonS3ReadOnlyAccess' }),
+        },
+        {
+            eventname: 'DetachManagedPolicyFromPermissionSet',
+            mkParams: (ps) => JSON.stringify({
+                InstanceArn: 'arn:aws:sso:::instance/ssoins-xxx',
+                PermissionSetArn: `arn:aws:sso:::permissionSet/ssoins-xxx/ps-${ps.toLowerCase()}`,
+                ManagedPolicyArn: 'arn:aws:iam::aws:policy/AmazonEC2FullAccess',
+            }),
+            mkResolved: (ps) => ({ permission_set: ps, policy: 'AmazonEC2FullAccess' }),
+        },
+        {
+            eventname: 'PutInlinePolicyToPermissionSet',
+            mkParams: (ps) => JSON.stringify({
+                InstanceArn: 'arn:aws:sso:::instance/ssoins-xxx',
+                PermissionSetArn: `arn:aws:sso:::permissionSet/ssoins-xxx/ps-${ps.toLowerCase()}`,
+                InlinePolicy: '{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"s3:DeleteBucket","Resource":"*"}]}',
+            }),
+            mkResolved: (ps) => ({ permission_set: ps }),
+        },
+        {
+            eventname: 'ProvisionPermissionSet',
+            mkParams: (ps, acct) => JSON.stringify({
+                InstanceArn: 'arn:aws:sso:::instance/ssoins-xxx',
+                PermissionSetArn: `arn:aws:sso:::permissionSet/ssoins-xxx/ps-${ps.toLowerCase()}`,
+                TargetType: 'AWS_ACCOUNT', TargetId: acct,
+            }),
+            mkResolved: (ps, acct, acctName) => ({ permission_set: ps, account: `${acctName} (${acct})` }),
+        },
+        {
+            eventname: 'CreatePermissionSet',
+            mkParams: (ps) => JSON.stringify({
+                InstanceArn: 'arn:aws:sso:::instance/ssoins-xxx',
+                Name: ps, Description: `New permission set: ${ps}`, SessionDuration: 'PT1H',
+            }),
+            mkResolved: (ps) => ({ permission_set: ps }),
+        },
+    ];
+
+    // Generate 75 events over the last 7 days
+    for (let i = 0; i < 75; i++) {
+        const hoursAgo = Math.floor(Math.random() * 168); // 7 days
+        const eventTime = new Date(now.getTime() - hoursAgo * 3600000);
+        const tmpl = templates[i % templates.length];
+        const actor = actors[i % actors.length];
+        const ip = ips[i % ips.length];
+        const acctIdx = i % accounts.length;
+        const ps = permSets[i % permSets.length];
+        const principal = principals[i % principals.length];
+        const hasError = i === 12 || i === 37; // Two failed events
+
+        events.push({
+            eventid: `demo-event-${String(i).padStart(4, '0')}`,
+            eventtime: eventTime.toISOString(),
+            eventname: tmpl.eventname,
+            actor_arn: actor,
+            actor_short: actor.split('/').pop(),
+            sourceipaddress: ip,
+            requestparameters: tmpl.mkParams(ps, accounts[acctIdx], principal),
+            resolved: tmpl.mkResolved(ps, accounts[acctIdx], accountNames[acctIdx], principal),
+            errorcode: hasError ? 'AccessDenied' : null,
+            errormessage: hasError ? 'User is not authorized to perform this operation' : null,
+        });
+    }
+
+    // Sort by time descending
+    events.sort((a, b) => new Date(b.eventtime) - new Date(a.eventtime));
+    return events;
 }
 
 export default App;

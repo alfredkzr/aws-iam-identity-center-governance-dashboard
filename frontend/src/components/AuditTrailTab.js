@@ -53,7 +53,7 @@ function parseRequestParams(paramsStr) {
     }
 }
 
-export default function AuditTrailTab({ apiFetch, apiEndpoint }) {
+export default function AuditTrailTab({ apiFetch, apiEndpoint, demoEvents }) {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -70,7 +70,30 @@ export default function AuditTrailTab({ apiFetch, apiEndpoint }) {
     const pageSize = 50;
 
     const fetchData = useCallback(async () => {
-        if (!apiEndpoint) return;
+        if (!apiEndpoint) {
+            // Demo mode — use provided demo events
+            if (demoEvents) {
+                setLoading(true);
+                // Simulate brief loading
+                setTimeout(() => {
+                    const assignmentNames = new Set(['CreateAccountAssignment', 'DeleteAccountAssignment']);
+                    let filtered = demoEvents;
+                    if (category === 'assignments') {
+                        filtered = demoEvents.filter(e => assignmentNames.has(e.eventname));
+                    } else if (category === 'permission_sets') {
+                        filtered = demoEvents.filter(e => !assignmentNames.has(e.eventname));
+                    }
+                    // Filter by date range
+                    filtered = filtered.filter(e => {
+                        const d = e.eventtime?.slice(0, 10);
+                        return d >= startDate && d <= endDate;
+                    });
+                    setEvents(filtered);
+                    setLoading(false);
+                }, 300);
+            }
+            return;
+        }
         setLoading(true);
         setError(null);
         try {
@@ -88,7 +111,7 @@ export default function AuditTrailTab({ apiFetch, apiEndpoint }) {
         } finally {
             setLoading(false);
         }
-    }, [apiEndpoint, apiFetch, startDate, endDate, category]);
+    }, [apiEndpoint, apiFetch, demoEvents, startDate, endDate, category]);
 
     useEffect(() => {
         fetchData();
@@ -162,7 +185,7 @@ export default function AuditTrailTab({ apiFetch, apiEndpoint }) {
         URL.revokeObjectURL(url);
     }, [filteredEvents, startDate, endDate]);
 
-    if (!apiEndpoint) {
+    if (!apiEndpoint && !demoEvents) {
         return (
             <div className="audit-container">
                 <div className="audit-empty">
