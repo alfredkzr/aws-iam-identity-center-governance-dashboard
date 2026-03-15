@@ -685,6 +685,18 @@
     color: var(--text-secondary);
 }
 
+.cell__assigned-by {
+    font-size: var(--font-xs);
+    color: var(--text-secondary);
+}
+
+.cell__assigned-at {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
 /* ---- Pagination ---- */
 
 .dashboard__pagination {

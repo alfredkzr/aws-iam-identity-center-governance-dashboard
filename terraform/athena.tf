@@ -242,3 +242,98 @@ resource "aws_athena_named_query" "summary_by_account" {
     ORDER BY total_assignments DESC
   EOQ
 }
+
+# -----------------------------------------------------------------------------
+# CloudTrail Logs Table (conditional — only when cloudtrail_bucket is configured)
+# -----------------------------------------------------------------------------
+
+resource "aws_glue_catalog_table" "cloudtrail" {
+  count         = local.cloudtrail_enabled ? 1 : 0
+  name          = local.cloudtrail_table_name
+  database_name = aws_glue_catalog_database.main.name
+
+  table_type = "EXTERNAL_TABLE"
+
+  parameters = {
+    "classification" = "cloudtrail"
+  }
+
+  storage_descriptor {
+    location      = local.cloudtrail_s3_location
+    input_format  = "com.amazon.emr.cloudtrail.CloudTrailInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
+
+    ser_de_info {
+      serialization_library = "org.apache.hive.hcatalog.data.JsonSerDe"
+    }
+
+    columns {
+      name = "eventversion"
+      type = "string"
+    }
+    columns {
+      name = "useridentity"
+      type = "struct<type:string,principalid:string,arn:string,accountid:string,invokedby:string,accesskeyid:string,username:string,sessioncontext:struct<attributes:struct<mfaauthenticated:string,creationdate:string>,sessionissuer:struct<type:string,principalid:string,arn:string,accountid:string,username:string>>>"
+    }
+    columns {
+      name = "eventtime"
+      type = "string"
+    }
+    columns {
+      name = "eventsource"
+      type = "string"
+    }
+    columns {
+      name = "eventname"
+      type = "string"
+    }
+    columns {
+      name = "awsregion"
+      type = "string"
+    }
+    columns {
+      name = "sourceipaddress"
+      type = "string"
+    }
+    columns {
+      name = "useragent"
+      type = "string"
+    }
+    columns {
+      name = "errorcode"
+      type = "string"
+    }
+    columns {
+      name = "errormessage"
+      type = "string"
+    }
+    columns {
+      name = "requestparameters"
+      type = "string"
+    }
+    columns {
+      name = "responseelements"
+      type = "string"
+    }
+    columns {
+      name = "additionaleventdata"
+      type = "string"
+    }
+    columns {
+      name = "requestid"
+      type = "string"
+    }
+    columns {
+      name = "eventid"
+      type = "string"
+    }
+    columns {
+      name = "eventtype"
+      type = "string"
+    }
+    columns {
+      name = "recipientaccountid"
+      type = "string"
+    }
+  }
+}

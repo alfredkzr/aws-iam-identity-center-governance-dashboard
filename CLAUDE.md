@@ -55,9 +55,10 @@ aws stepfunctions start-execution \
 - `default_risk_policies.py` is duplicated identically in both `backend/worker/` and `backend/athena_proxy/` — changes must be applied to both copies
 - boto3 clients use `Config(retries={"max_attempts": 5, "mode": "adaptive"})`
 - Worker Lambda caches identity resolution in module-level dicts (`_user_cache`, `_group_cache`, etc.)
-- Athena Proxy has a query type allowlist (`all`, `summary`, `dates`, `permission_sets`, `permission_sets_dates`, `risk_policies`, `save_risk_policies`)
+- Athena Proxy has a query type allowlist (`all`, `summary`, `dates`, `permission_sets`, `permission_sets_dates`, `risk_policies`, `save_risk_policies`, `change_history`, `audit_status`)
 - Table names are validated with regex `^[a-zA-Z_][a-zA-Z0-9_]*$` to prevent SQL injection
 - Risk levels: critical (4) > high (3) > medium (2) > low (1)
+- CloudTrail Audit Trail: When `cloudtrail_bucket` is configured, a Glue table (`cloudtrail_logs`) is created with partition projection to query Organization CloudTrail logs. The Athena Proxy serves `change_history` and `audit_status` query types for the Audit Trail tab
 
 ## Important Terraform Patterns
 
@@ -71,7 +72,7 @@ aws stepfunctions start-execution \
 
 - Auth state persisted to `sessionStorage` (not localStorage)
 - `REACT_APP_API_ENDPOINT` injected at build time; without it, `App.js` uses hardcoded demo data
-- Three tabs managed by `activeTab` state in `App.js`: Assignments, Permission Sets, Security
+- Four tabs managed by `activeTab` state in `App.js`: Assignments, Permission Sets, Security, Audit Trail (Audit Trail only visible when CloudTrail is configured)
 
 ## Required Terraform Variables
 

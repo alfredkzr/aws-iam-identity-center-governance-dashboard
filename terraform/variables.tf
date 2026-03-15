@@ -156,3 +156,31 @@ variable "local_api_key" {
   default     = ""
   sensitive   = true
 }
+
+# -----------------------------------------------------------------------------
+# CloudTrail Audit Trail (optional)
+# -----------------------------------------------------------------------------
+
+variable "cloudtrail_bucket" {
+  description = "S3 bucket name containing Organization CloudTrail logs. Leave empty to disable the Audit Trail feature."
+  type        = string
+  default     = ""
+}
+
+variable "cloudtrail_prefix" {
+  description = "S3 key prefix for CloudTrail logs inside the bucket (typically 'AWSLogs')."
+  type        = string
+  default     = "AWSLogs"
+}
+
+variable "organization_id" {
+  description = "AWS Organization ID (e.g. o-xxxxxxxxxx). Required when cloudtrail_bucket is set, used to construct the S3 path to org-level CloudTrail logs."
+  type        = string
+  default     = ""
+}
+
+variable "management_account_id" {
+  description = "AWS management account ID where IAM Identity Center and CloudTrail are hosted. Required when cloudtrail_bucket is set and deploying from a delegated admin account."
+  type        = string
+  default     = ""
+}

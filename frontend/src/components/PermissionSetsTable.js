@@ -14,6 +14,8 @@ const COLUMNS = [
     { key: 'boundary',    label: 'Boundary',    sortable: false, initWidth: 130 },
     { key: 'tags',        label: 'Tags',        sortable: false, initWidth: 140 },
     { key: 'created',     label: 'Created',     sortable: true,  initWidth: 90 },
+    { key: 'created_by',  label: 'Created By',  sortable: true,  initWidth: 110 },
+    { key: 'updated_by',  label: 'Last Updated By', sortable: true, initWidth: 130 },
 ];
 
 const SORT_FIELD_MAP = {
@@ -23,6 +25,8 @@ const SORT_FIELD_MAP = {
     session: 'session_duration',
     policies: 'aws_managed_policies',
     created: 'created_date',
+    created_by: 'created_by',
+    updated_by: 'updated_by',
 };
 
 function PermissionSetsTable({ data, loading, availableDates = [], selectedDate, onDateChange, onRefresh }) {
@@ -198,7 +202,7 @@ function PermissionSetsTable({ data, loading, availableDates = [], selectedDate,
         const headers = [
             'Name', 'Description', 'ARN', 'Provisioned Accounts', 'Session Duration',
             'AWS Managed Policies', 'Customer Managed Policies', 'Has Inline Policy',
-            'Permissions Boundary', 'Tags', 'Created Date'
+            'Permissions Boundary', 'Tags', 'Created Date', 'Created By', 'Last Updated By', 'Last Updated At'
         ];
         const rows = filteredSets.map(ps => [
             ps.name || '',
@@ -215,6 +219,9 @@ function PermissionSetsTable({ data, loading, availableDates = [], selectedDate,
                 : '',
             (ps.tags || []).map(t => `${t.Key}=${t.Value}`).join('; '),
             ps.created_date || '',
+            ps.created_by || '',
+            ps.updated_by || '',
+            ps.updated_at || '',
         ]);
 
         const csvContent = [
@@ -609,6 +616,19 @@ function PermissionSetsTable({ data, loading, availableDates = [], selectedDate,
                                             {/* Created */}
                                             <td className="ps-td">
                                                 {ps.created_date ? new Date(ps.created_date).toLocaleDateString() : '—'}
+                                            </td>
+                                            {/* Created By */}
+                                            <td className="ps-td ps-td--attribution">
+                                                {ps.created_by || '—'}
+                                            </td>
+                                            {/* Last Updated By */}
+                                            <td className="ps-td ps-td--attribution">
+                                                {ps.updated_by ? (
+                                                    <div>
+                                                        <span>{ps.updated_by}</span>
+                                                        {ps.updated_at && <span className="ps-attribution__date">{new Date(ps.updated_at).toLocaleDateString()}</span>}
+                                                    </div>
+                                                ) : '—'}
                                             </td>
                                         </tr>
                                         {/* Expanded inline policy row */}

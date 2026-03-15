@@ -5,10 +5,12 @@ import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import PermissionSetsTable from './components/PermissionSetsTable';
 import SecurityTab from './components/SecurityTab';
+import AuditTrailTab from './components/AuditTrailTab';
 import LoginPage from './components/LoginPage';
 
 const API_ENDPOINT = process.env.REACT_APP_API_ENDPOINT || '';
 const LOCAL_API_KEY = process.env.REACT_APP_LOCAL_API_KEY || '';
+const AUDIT_TRAIL_ENABLED = process.env.REACT_APP_AUDIT_TRAIL_ENABLED === 'true';
 
 /** Wraps fetch() to attach auth headers.
  *  Uses X-Auth-Token (Okta) or X-Api-Key (local) because CloudFront OAC
@@ -311,6 +313,22 @@ function AppContent() {
                         </svg>
                         Security
                     </button>
+                    {AUDIT_TRAIL_ENABLED && (
+                        <button
+                            className={`tab-nav__tab ${activeTab === 'audit_trail' ? 'tab-nav__tab--active' : ''}`}
+                            onClick={() => setActiveTab('audit_trail')}
+                            id="tab-audit-trail"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                                <polyline points="10 9 9 9 8 9" />
+                            </svg>
+                            Audit Trail
+                        </button>
+                    )}
                 </div>
             </nav>
 
@@ -346,6 +364,8 @@ function AppContent() {
                         onDateChange={(newDate) => fetchPermissionSets(newDate)}
                         onRefresh={() => fetchPermissionSets(psSelectedDate, true)}
                     />
+                ) : activeTab === 'audit_trail' ? (
+                    <AuditTrailTab apiFetch={apiFetch} apiEndpoint={API_ENDPOINT} />
                 ) : (
                     <SecurityTab
                         permissionSetsData={psData}

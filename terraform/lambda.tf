@@ -17,6 +17,10 @@ locals {
   )
 
   oidc_enabled = local.oidc_userinfo_url != ""
+
+  cloudtrail_enabled     = var.cloudtrail_bucket != ""
+  cloudtrail_table_name  = "cloudtrail_logs"
+  cloudtrail_s3_location = var.organization_id != "" ? "s3://${var.cloudtrail_bucket}/${var.cloudtrail_prefix}/${var.organization_id}" : "s3://${var.cloudtrail_bucket}/${var.cloudtrail_prefix}"
 }
 
 # -----------------------------------------------------------------------------
@@ -93,6 +97,9 @@ resource "aws_lambda_function" "athena_proxy" {
       OKTA_DOMAIN                  = var.okta_domain
       OIDC_USERINFO_URL            = local.oidc_userinfo_url
       LOCAL_API_KEY                = local.oidc_enabled ? "" : local.effective_api_key
+      CLOUDTRAIL_TABLE             = local.cloudtrail_enabled ? local.cloudtrail_table_name : ""
+      CLOUDTRAIL_ACCOUNT_ID        = var.management_account_id
+      CLOUDTRAIL_REGION            = var.aws_region
     }
   }
 }

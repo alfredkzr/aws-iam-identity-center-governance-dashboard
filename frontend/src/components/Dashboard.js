@@ -61,6 +61,7 @@ function Dashboard({ data, loading, error, availableDates = [], selectedDate, on
                 a.principal_email?.toLowerCase().includes(q) ||
                 a.permission_set_name?.toLowerCase().includes(q) ||
                 a.group_name?.toLowerCase().includes(q) ||
+                a.assigned_by?.toLowerCase().includes(q) ||
                 a.account_id?.includes(q)
             );
         }
@@ -319,6 +320,7 @@ function Dashboard({ data, loading, error, availableDates = [], selectedDate, on
                                 <SortHeader field="permission_set_name" label="Permission Set" current={sortField} direction={sortDirection} onSort={handleSort} />
                                 <th className="dashboard__th">Risk</th>
                                 <SortHeader field="group_name" label="Group" current={sortField} direction={sortDirection} onSort={handleSort} />
+                                <SortHeader field="assigned_by" label="Assigned By" current={sortField} direction={sortDirection} onSort={handleSort} />
                             </tr>
                         </thead>
                         <tbody>
@@ -349,11 +351,19 @@ function Dashboard({ data, loading, error, availableDates = [], selectedDate, on
                                         ) : null}
                                     </td>
                                     <td className="dashboard__td cell__group">{a.group_name || '—'}</td>
+                                    <td className="dashboard__td cell__assigned-by">
+                                        {a.assigned_by ? (
+                                            <div>
+                                                <span>{a.assigned_by}</span>
+                                                {a.assigned_at && <span className="cell__assigned-at">{new Date(a.assigned_at).toLocaleDateString()}</span>}
+                                            </div>
+                                        ) : '—'}
+                                    </td>
                                 </tr>
                             ))}
                             {paginatedAssignments.length === 0 && (
                                 <tr>
-                                    <td colSpan="7" className="dashboard__td dashboard__empty">
+                                    <td colSpan="8" className="dashboard__td dashboard__empty">
                                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
                                             <circle cx="10" cy="10" r="8" />
                                             <path d="M7 13s1-1.5 3-1.5 3 1.5 3 1.5M7.5 7.5h.01M12.5 7.5h.01" />

@@ -24,6 +24,7 @@
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
 - [SSO Setup](#sso-setup)
+- [Audit Trail Setup](#audit-trail-setup)
 - [Configuration Reference](#configuration-reference)
 - [Project Structure](#project-structure)
 - [Security](#security)
@@ -125,6 +126,7 @@ flowchart TD
 | **Historical Snapshots** | Browse and compare past crawl snapshots via the date selector |
 | **Cost-Optimised** | No Glue Crawlers, no NAT Gateways, auto-expiry lifecycle policies, fully serverless |
 | **Security Hardened** | AES-256 encryption, CloudFront OAC, SQL injection prevention, query allowlist, IAM least-privilege |
+| **Audit Trail** | Tracks who assigned/removed permission sets and who created/modified permission set configurations, sourced from CloudTrail |
 
 ---
 
@@ -161,6 +163,16 @@ Provides risk scoring and an interactive policy rule editor.
 - **Rule Editor:** Add, edit, or delete custom risk rules based on managed policy names or inline policy actions (supports exact and wildcard matching)
 - **Export:** Download the risk policy rules to CSV or print to PDF
 - **Default Fallback:** Ships with industry-standard rules out of the box (restorable at any time)
+
+### Audit Trail Tab
+
+Shows who made changes to IAM Identity Center resources, sourced from CloudTrail logs.
+
+- **Date range picker** to scope the query (default: last 7 days)
+- **Category filter** for All Changes, Assignment Changes, or Permission Set Changes
+- **Search** by actor name, event type, or IP address
+- **Expandable details** showing the full CloudTrail request parameters as JSON
+- **Export** events to CSV
 
 ---
 
@@ -356,6 +368,175 @@ REACT_APP_AZURE_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 ---
 
+## Audit Trail Setup
+
+> [!NOTE]
+> The Audit Trail feature is **optional**. It shows who assigned/removed permission sets, who created/modified permission sets, and enriches the Assignments and Permission Sets tabs with "Assigned By" and "Created/Updated By" columns. It queries CloudTrail logs via Athena at zero fixed cost. Attribution data only appears for changes made **after** the Organization Trail is created.
+
+### Step 1: Check for an Existing Organization Trail
+
+Run this from any account:
+
+```bash
+aws cloudtrail describe-trails --query 'trailList[?IsOrganizationTrail==`true`].[Name,S3BucketName]' --output table
+```
+
+If you see a trail, skip to [Step 3](#step-3-configure-cross-account-access). If not, create one below.
+
+### Step 2: Create an Organization Trail (Management Account)
+
+This must be done from the **management account**. The first management event trail is **free**.
+
+```bash
+# Set your management account profile
+export AWS_PROFILE=your-management-account-profile
+
+# Get your Organization ID
+ORG_ID=$(aws organizations describe-organization --query 'Organization.Id' --output text)
+MGMT_ACCOUNT=$(aws sts get-caller-identity --query 'Account' --output text)
+BUCKET_NAME="your-org-cloudtrail"
+REGION="ap-southeast-1"  # Use your preferred region
+
+# 1. Create S3 bucket
+aws s3api create-bucket \
+  --bucket $BUCKET_NAME \
+  --region $REGION \
+  --create-bucket-configuration LocationConstraint=$REGION
+
+# 2. Secure the bucket
+aws s3api put-public-access-block \
+  --bucket $BUCKET_NAME \
+  --public-access-block-configuration \
+    BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+
+aws s3api put-bucket-encryption \
+  --bucket $BUCKET_NAME \
+  --server-side-encryption-configuration \
+    '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
+
+# 3. Set lifecycle (1 year retention)
+aws s3api put-bucket-lifecycle-configuration \
+  --bucket $BUCKET_NAME \
+  --lifecycle-configuration \
+    '{"Rules":[{"ID":"ExpireCloudTrailLogs","Status":"Enabled","Filter":{"Prefix":"AWSLogs/"},"Expiration":{"Days":365}}]}'
+
+# 4. Set bucket policy (CloudTrail write access)
+aws s3api put-bucket-policy --bucket $BUCKET_NAME --policy "{
+  \"Version\": \"2012-10-17\",
+  \"Statement\": [
+    {
+      \"Sid\": \"AWSCloudTrailAclCheck\",
+      \"Effect\": \"Allow\",
+      \"Principal\": {\"Service\": \"cloudtrail.amazonaws.com\"},
+      \"Action\": \"s3:GetBucketAcl\",
+      \"Resource\": \"arn:aws:s3:::$BUCKET_NAME\",
+      \"Condition\": {\"StringEquals\": {\"AWS:SourceArn\": \"arn:aws:cloudtrail:$REGION:$MGMT_ACCOUNT:trail/org-management-trail\"}}
+    },
+    {
+      \"Sid\": \"AWSCloudTrailWrite\",
+      \"Effect\": \"Allow\",
+      \"Principal\": {\"Service\": \"cloudtrail.amazonaws.com\"},
+      \"Action\": \"s3:PutObject\",
+      \"Resource\": \"arn:aws:s3:::$BUCKET_NAME/AWSLogs/$MGMT_ACCOUNT/*\",
+      \"Condition\": {\"StringEquals\": {\"s3:x-amz-acl\": \"bucket-owner-full-control\", \"AWS:SourceArn\": \"arn:aws:cloudtrail:$REGION:$MGMT_ACCOUNT:trail/org-management-trail\"}}
+    },
+    {
+      \"Sid\": \"AWSCloudTrailOrgWrite\",
+      \"Effect\": \"Allow\",
+      \"Principal\": {\"Service\": \"cloudtrail.amazonaws.com\"},
+      \"Action\": \"s3:PutObject\",
+      \"Resource\": \"arn:aws:s3:::$BUCKET_NAME/AWSLogs/$ORG_ID/*\",
+      \"Condition\": {\"StringEquals\": {\"s3:x-amz-acl\": \"bucket-owner-full-control\", \"AWS:SourceArn\": \"arn:aws:cloudtrail:$REGION:$MGMT_ACCOUNT:trail/org-management-trail\"}}
+    }
+  ]
+}"
+
+# 5. Enable CloudTrail service access for Organizations
+aws organizations enable-aws-service-access --service-principal cloudtrail.amazonaws.com
+
+# 6. Create the Organization Trail
+aws cloudtrail create-trail \
+  --name org-management-trail \
+  --s3-bucket-name $BUCKET_NAME \
+  --is-organization-trail \
+  --is-multi-region-trail \
+  --region $REGION
+
+# 7. Start logging
+aws cloudtrail start-logging --name org-management-trail --region $REGION
+```
+
+### Step 3: Configure Cross-Account Access
+
+If the dashboard is deployed in a **delegated admin account** (not the management account), add a read policy to the CloudTrail bucket so the dashboard Lambda can query the logs.
+
+Run this from the **management account**:
+
+```bash
+# Add to the EXISTING bucket policy (merge with the CloudTrail write statements)
+# Replace <delegated-admin-account-id> and <resource-prefix> with your values
+```
+
+```json
+{
+    "Sid": "AllowDashboardLambdaRead",
+    "Effect": "Allow",
+    "Principal": {
+        "AWS": "arn:aws:iam::<delegated-admin-account-id>:role/<resource-prefix>-athena-proxy-lambda-role"
+    },
+    "Action": [
+        "s3:GetObject",
+        "s3:ListBucket",
+        "s3:GetBucketLocation"
+    ],
+    "Resource": [
+        "arn:aws:s3:::<cloudtrail-bucket>",
+        "arn:aws:s3:::<cloudtrail-bucket>/*"
+    ]
+}
+```
+
+> **Tip:** If you created the trail using Step 2 above, you can add this statement to the same `put-bucket-policy` command by appending it to the `Statement` array.
+
+### Step 4: Configure and Deploy
+
+Add to `terraform/terraform.tfvars` in the **delegated admin account**:
+
+```hcl
+cloudtrail_bucket     = "your-org-cloudtrail"
+organization_id       = "o-xxxxxxxxxx"
+management_account_id = "123456789012"
+```
+
+Find these values:
+
+```bash
+# Organization ID
+aws organizations describe-organization --query 'Organization.Id' --output text
+
+# Management account ID (the account that owns the trail)
+aws organizations describe-organization --query 'Organization.MasterAccountId' --output text
+```
+
+Then deploy:
+
+```bash
+cd terraform && terraform apply
+```
+
+The Audit Trail tab will appear automatically in the dashboard.
+
+### How It Works
+
+- CloudTrail logs every IAM Identity Center API call (assignments, permission set changes) with full actor attribution
+- Logs are delivered to S3 within ~5-15 minutes
+- The dashboard queries these logs via Athena when you open the Audit Trail tab
+- The Assignments tab shows "Assigned By" and the Permission Sets tab shows "Created By" / "Last Updated By" for changes made after the trail was created
+- Only SSO-related events are queried (`eventsource = sso.amazonaws.com`) — other CloudTrail events are ignored
+- **Cost:** First management trail is free. Athena queries cost ~$0.001-0.01 per query with date filtering
+
+---
+
 ## Configuration Reference
 
 ### Required Variables
@@ -379,6 +560,10 @@ REACT_APP_AZURE_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 | `azure_client_id` | `string` | `""` | Azure AD OIDC client ID |
 | `local_admin_username` | `string` | `"admin"` | Username for local dashboard login (when no IdP is configured) |
 | `local_admin_password` | `string` | `"admin123"` | Password for local dashboard login (when no IdP is configured) |
+| `cloudtrail_bucket` | `string` | `""` | S3 bucket with Organization CloudTrail logs (enables Audit Trail tab) |
+| `cloudtrail_prefix` | `string` | `"AWSLogs"` | S3 key prefix for CloudTrail logs |
+| `organization_id` | `string` | `""` | AWS Organization ID for CloudTrail path |
+| `management_account_id` | `string` | `""` | Management account ID where CloudTrail logs SSO events |
 
 ### Schedule & Lifecycle
 

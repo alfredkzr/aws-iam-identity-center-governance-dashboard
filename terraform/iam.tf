@@ -118,7 +118,7 @@ resource "aws_iam_role_policy" "athena_proxy_lambda_policy" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         Sid    = "CloudWatchLogs"
         Effect = "Allow"
@@ -174,7 +174,21 @@ resource "aws_iam_role_policy" "athena_proxy_lambda_policy" {
           "${aws_s3_bucket.cache.arn}/*"
         ]
       }
-    ]
+      ], local.cloudtrail_enabled ? [
+      {
+        Sid    = "S3ReadCloudTrail"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:s3:::${var.cloudtrail_bucket}",
+          "arn:${data.aws_partition.current.partition}:s3:::${var.cloudtrail_bucket}/*"
+        ]
+      }
+    ] : [])
   })
 }
 

@@ -193,6 +193,7 @@ resource "null_resource" "frontend_deploy" {
       REACT_APP_LOCAL_ADMIN_USERNAME = var.local_admin_username
       REACT_APP_LOCAL_ADMIN_PASSWORD = var.local_admin_password
       REACT_APP_LOCAL_API_KEY        = local.oidc_enabled ? "" : local.effective_api_key
+      REACT_APP_AUDIT_TRAIL_ENABLED  = local.cloudtrail_enabled ? "true" : ""
     }
     command = <<-EOT
       npm ci --prefer-offline --no-audit

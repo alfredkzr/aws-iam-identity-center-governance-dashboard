@@ -18,7 +18,7 @@ import re
 import time
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import boto3
 from botocore.config import Config
@@ -43,6 +43,9 @@ OIDC_USERINFO_URL = os.environ.get("OIDC_USERINFO_URL", "")
 if not OIDC_USERINFO_URL and OKTA_DOMAIN:
     OIDC_USERINFO_URL = f"https://{OKTA_DOMAIN}/oauth2/default/v1/userinfo"
 LOCAL_API_KEY = os.environ.get("LOCAL_API_KEY", "")
+CLOUDTRAIL_TABLE = os.environ.get("CLOUDTRAIL_TABLE", "")
+CLOUDTRAIL_ACCOUNT_ID = os.environ.get("CLOUDTRAIL_ACCOUNT_ID", "")
+CLOUDTRAIL_REGION = os.environ.get("CLOUDTRAIL_REGION", "")
 
 RISK_POLICIES_KEY = "risk-policies.json"
 
@@ -50,7 +53,7 @@ CACHE_KEY = "summary.json"
 CACHE_MAX_AGE_SECONDS = 3600  # 1 hour
 
 # Valid query types — allowlist to prevent abuse
-VALID_QUERY_TYPES = {"all", "summary", "dates", "permission_sets", "permission_sets_dates", "risk_policies", "save_risk_policies"}
+VALID_QUERY_TYPES = {"all", "summary", "dates", "permission_sets", "permission_sets_dates", "risk_policies", "save_risk_policies", "change_history", "audit_status"}
 
 # Validate table names at cold-start to prevent SQL injection
 _TABLE_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -60,6 +63,45 @@ for _tbl_name in (ATHENA_TABLE, ATHENA_PERMISSION_SETS_TABLE):
             f"Invalid table name '{_tbl_name}'. "
             "Must match pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$"
         )
+if CLOUDTRAIL_TABLE and not _TABLE_NAME_PATTERN.match(CLOUDTRAIL_TABLE):
+    raise ValueError(
+        f"Invalid table name '{CLOUDTRAIL_TABLE}'. "
+        "Must match pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$"
+    )
+
+# Human-readable labels for SSO CloudTrail events
+SSO_EVENT_NAMES = {
+    "CreateAccountAssignment": "Assigned Permission Set",
+    "DeleteAccountAssignment": "Removed Assignment",
+    "CreatePermissionSet": "Created Permission Set",
+    "DeletePermissionSet": "Deleted Permission Set",
+    "UpdatePermissionSet": "Updated Permission Set",
+    "PutInlinePolicyToPermissionSet": "Added Inline Policy",
+    "DeleteInlinePolicyFromPermissionSet": "Removed Inline Policy",
+    "AttachManagedPolicyToPermissionSet": "Attached Managed Policy",
+    "DetachManagedPolicyFromPermissionSet": "Detached Managed Policy",
+    "AttachCustomerManagedPolicyReferenceToPermissionSet": "Attached Customer Policy",
+    "DetachCustomerManagedPolicyReferenceFromPermissionSet": "Detached Customer Policy",
+    "PutPermissionsBoundaryToPermissionSet": "Set Permissions Boundary",
+    "DeletePermissionsBoundaryFromPermissionSet": "Removed Permissions Boundary",
+    "ProvisionPermissionSet": "Provisioned Permission Set",
+}
+
+SSO_EVENT_CATEGORIES = {
+    "assignments": [
+        "CreateAccountAssignment",
+        "DeleteAccountAssignment",
+    ],
+    "permission_sets": [
+        "CreatePermissionSet", "DeletePermissionSet", "UpdatePermissionSet",
+        "PutInlinePolicyToPermissionSet", "DeleteInlinePolicyFromPermissionSet",
+        "AttachManagedPolicyToPermissionSet", "DetachManagedPolicyFromPermissionSet",
+        "AttachCustomerManagedPolicyReferenceToPermissionSet",
+        "DetachCustomerManagedPolicyReferenceFromPermissionSet",
+        "PutPermissionsBoundaryToPermissionSet", "DeletePermissionsBoundaryFromPermissionSet",
+        "ProvisionPermissionSet",
+    ],
+}
 
 # Boto3 clients
 boto_config = Config(retries={"max_attempts": 5, "mode": "adaptive"})
@@ -174,6 +216,16 @@ def lambda_handler(event, context):
             dates = _get_available_dates(prefix="permission_sets/snapshot_date=")
             return _response(200, {"dates": dates})
 
+        # Audit trail status
+        if query_type == "audit_status":
+            return _response(200, {"enabled": bool(CLOUDTRAIL_TABLE)})
+
+        # Change history from CloudTrail
+        if query_type == "change_history":
+            if not CLOUDTRAIL_TABLE:
+                return _response(400, {"error": "Audit trail not configured. Set cloudtrail_bucket in Terraform."})
+            return _handle_change_history(event)
+
         # Risk policies: read or save
         if query_type == "risk_policies":
             return _handle_get_risk_policies()
@@ -200,6 +252,7 @@ def lambda_handler(event, context):
             cached = _get_cached_summary(snapshot_date)
             if cached is not None:
                 logger.info("Cache hit — returning cached summary")
+                _enrich_assignments_with_attribution(cached.get("assignments", []))
                 return _response(200, cached)
         else:
             logger.info("Force refresh requested — bypassing cache")
@@ -365,6 +418,7 @@ def _get_query_sql(query_type, snapshot_date):
                 account_id,
                 account_name,
                 principal_type,
+                principal_id,
                 principal_name,
                 principal_email,
                 permission_set_name,
@@ -389,6 +443,9 @@ def _build_summary(rows, snapshot_date=None):
         accounts.add(row.get("account_id", ""))
         principals.add(row.get("principal_name", ""))
         permission_sets.add(row.get("permission_set_name", ""))
+
+    # Enrich with CloudTrail attribution (who assigned what)
+    _enrich_assignments_with_attribution(rows)
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -573,6 +630,7 @@ def _handle_permission_sets(snapshot_date, force_refresh):
                 cached_data = json.loads(body)
                 # Re-evaluate risk at query time (always uses latest rules)
                 _reeval_risk_scores(cached_data.get("permission_sets", []))
+                _enrich_permission_sets_with_attribution(cached_data.get("permission_sets", []))
                 return _response(200, cached_data)
         except Exception:
             pass
@@ -600,6 +658,9 @@ def _handle_permission_sets(snapshot_date, force_refresh):
 
     # Re-evaluate risk at query time (always uses latest rules)
     _reeval_risk_scores(records)
+
+    # Enrich with CloudTrail attribution (who created/updated)
+    _enrich_permission_sets_with_attribution(records)
 
     result = {
         "snapshot_date": snapshot_date,
@@ -694,6 +755,413 @@ def _handle_save_risk_policies(event):
     except Exception as exc:
         logger.exception(f"Failed to save risk policies: {exc}")
         return _response(500, {"error": "Failed to save risk policies"})
+
+
+# ---------------------------------------------------------------------------
+# CloudTrail Audit Trail
+# ---------------------------------------------------------------------------
+def _handle_change_history(event):
+    """Query CloudTrail for SSO change events."""
+    params = event.get("queryStringParameters") or {}
+
+    # Parse date range (default last 7 days)
+    end_date = params.get("end_date")
+    start_date = params.get("start_date")
+    if not start_date or not end_date:
+        today = datetime.now(timezone.utc).date()
+        end_date = end_date or today.isoformat()
+        start_date = start_date or (today - timedelta(days=7)).isoformat()
+
+    # Validate date format
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", start_date) or not re.match(r"^\d{4}-\d{2}-\d{2}$", end_date):
+        return _response(400, {"error": "Dates must be YYYY-MM-DD format"})
+
+    # Parse category filter
+    category = params.get("category", "all")
+    if category not in ("all", "assignments", "permission_sets"):
+        return _response(400, {"error": "Invalid category. Must be: all, assignments, permission_sets"})
+
+    sql = _build_change_history_sql(start_date, end_date, category)
+    logger.info(f"Running CloudTrail query: category={category}, {start_date} to {end_date}")
+
+    # Run query using existing Athena lifecycle
+    start_response = athena.start_query_execution(
+        QueryString=sql,
+        QueryExecutionContext={"Database": ATHENA_DATABASE},
+        WorkGroup=ATHENA_WORKGROUP,
+    )
+    query_execution_id = start_response["QueryExecutionId"]
+    logger.info(f"Started CloudTrail Athena query: {query_execution_id}")
+
+    result = _wait_for_query(query_execution_id)
+    if result["QueryExecution"]["Status"]["State"] != "SUCCEEDED":
+        reason = result["QueryExecution"]["Status"].get("StateChangeReason", "Unknown")
+        raise RuntimeError(f"Athena query failed: {reason}")
+
+    results = _fetch_results(query_execution_id)
+
+    # Build lookup maps from existing S3 inventory data
+    lookups = _build_audit_lookups()
+
+    # First pass: build ARN→name map from the events themselves
+    # (catches deleted permission sets whose names appear in CreatePermissionSet events)
+    for row in results:
+        raw_resp = row.get("responseelements", "")
+        raw_req = row.get("requestparameters", "")
+        if raw_resp:
+            try:
+                resp = json.loads(raw_resp) if isinstance(raw_resp, str) else raw_resp
+                ps_detail = resp.get("permissionSet", {})
+                if ps_detail.get("permissionSetArn") and ps_detail.get("name"):
+                    lookups["permission_sets"][ps_detail["permissionSetArn"]] = ps_detail["name"]
+            except (json.JSONDecodeError, AttributeError, TypeError):
+                pass
+        if raw_req:
+            try:
+                req = json.loads(raw_req) if isinstance(raw_req, str) else raw_req
+                if req.get("permissionSetArn") and req.get("name"):
+                    lookups["permission_sets"][req["permissionSetArn"]] = req["name"]
+            except (json.JSONDecodeError, AttributeError, TypeError):
+                pass
+
+    # Second pass: add human-readable names and extract short actor
+    for row in results:
+        row["event_display"] = SSO_EVENT_NAMES.get(row.get("eventname", ""), row.get("eventname", ""))
+        arn = row.get("actor_arn", "")
+        if "/" in arn:
+            row["actor_short"] = arn.split("/")[-1]
+        elif ":" in arn:
+            row["actor_short"] = arn.split(":")[-1]
+        else:
+            row["actor_short"] = arn
+
+        # Resolve IDs in requestParameters and responseElements to friendly names
+        resolved = {}
+        raw_params = row.get("requestparameters", "")
+        raw_response = row.get("responseelements", "")
+        if raw_params:
+            try:
+                params = json.loads(raw_params) if isinstance(raw_params, str) else raw_params
+                if params.get("targetId"):
+                    resolved["account"] = lookups["accounts"].get(params["targetId"], params["targetId"])
+                if params.get("principalId"):
+                    resolved["principal"] = lookups["principals"].get(params["principalId"], params["principalId"])
+                    resolved["principal_type"] = params.get("principalType", "")
+                if params.get("permissionSetArn"):
+                    resolved["permission_set"] = lookups["permission_sets"].get(params["permissionSetArn"], params["permissionSetArn"])
+                if params.get("name"):
+                    # CreatePermissionSet has name in request
+                    resolved["permission_set"] = params["name"]
+                if params.get("managedPolicyArn"):
+                    resolved["policy"] = params["managedPolicyArn"].split("/")[-1]
+                if params.get("customerManagedPolicyReference"):
+                    ref = params["customerManagedPolicyReference"]
+                    resolved["policy"] = ref.get("name", str(ref))
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        # Also check responseElements for permission set details (CreatePermissionSet returns ARN/name here)
+        if raw_response and not resolved.get("permission_set"):
+            try:
+                resp = json.loads(raw_response) if isinstance(raw_response, str) else raw_response
+                ps_detail = resp.get("permissionSet", {})
+                if ps_detail.get("name"):
+                    resolved["permission_set"] = ps_detail["name"]
+                if ps_detail.get("permissionSetArn"):
+                    resolved["permission_set"] = lookups["permission_sets"].get(
+                        ps_detail["permissionSetArn"], resolved.get("permission_set", ps_detail["permissionSetArn"]))
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        row["resolved"] = resolved
+
+    return _response(200, {
+        "events": results,
+        "start_date": start_date,
+        "end_date": end_date,
+        "category": category,
+        "total_events": len(results),
+    })
+
+
+def _enrich_assignments_with_attribution(assignments):
+    """Add 'assigned_by' and 'assigned_at' to each assignment using CloudTrail."""
+    if not CLOUDTRAIL_TABLE or not assignments:
+        return
+
+    try:
+        sql = f"""
+            SELECT
+                eventtime,
+                useridentity.arn AS actor_arn,
+                requestparameters
+            FROM {CLOUDTRAIL_TABLE}
+            WHERE eventsource = 'sso.amazonaws.com'
+              AND eventname = 'CreateAccountAssignment'
+              AND errorcode IS NULL
+            ORDER BY eventtime DESC
+            LIMIT 5000
+        """
+        start_resp = athena.start_query_execution(
+            QueryString=sql,
+            QueryExecutionContext={"Database": ATHENA_DATABASE},
+            WorkGroup=ATHENA_WORKGROUP,
+        )
+        result = _wait_for_query(start_resp["QueryExecutionId"])
+        if result["QueryExecution"]["Status"]["State"] != "SUCCEEDED":
+            return
+        rows = _fetch_results(start_resp["QueryExecutionId"])
+    except Exception as exc:
+        logger.warning(f"Failed to query CloudTrail for assignment attribution: {exc}")
+        return
+
+    # Build lookup: (account_id, principal_id, ps_arn) → {assigned_by, assigned_at}
+    lookup = {}
+    for row in rows:
+        try:
+            params = json.loads(row.get("requestparameters", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            continue
+        key = (params.get("targetId", ""), params.get("principalId", ""), params.get("permissionSetArn", ""))
+        if key not in lookup:
+            arn = row.get("actor_arn", "")
+            actor = arn.split("/")[-1] if "/" in arn else arn.split(":")[-1] if ":" in arn else arn
+            lookup[key] = {"assigned_by": actor, "assigned_at": row.get("eventtime", "")}
+
+    # Build secondary lookup by (account_id, permission_set_arn) for broader matching
+    # This catches USER_VIA_GROUP rows where principal_id differs
+    lookup_by_acct_ps = {}
+    for row in rows:
+        try:
+            params = json.loads(row.get("requestparameters", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            continue
+        acct_ps_key = (params.get("targetId", ""), params.get("permissionSetArn", ""))
+        if acct_ps_key not in lookup_by_acct_ps:
+            arn = row.get("actor_arn", "")
+            actor = arn.split("/")[-1] if "/" in arn else arn.split(":")[-1] if ":" in arn else arn
+            lookup_by_acct_ps[acct_ps_key] = {"assigned_by": actor, "assigned_at": row.get("eventtime", "")}
+
+    logger.info(f"CloudTrail assignment lookup: {len(lookup)} exact keys, {len(lookup_by_acct_ps)} acct+ps keys, from {len(rows)} rows")
+
+    # Merge into assignments — try exact match first, then fall back to acct+ps match
+    for a in assignments:
+        key = (a.get("account_id", ""), a.get("principal_id", ""), a.get("permission_set_arn", ""))
+        attr = lookup.get(key)
+        if not attr:
+            # Try matching by account + permission set (catches group-expanded rows)
+            acct_ps_key = (a.get("account_id", ""), a.get("permission_set_arn", ""))
+            attr = lookup_by_acct_ps.get(acct_ps_key)
+        if attr:
+            a["assigned_by"] = attr["assigned_by"]
+            a["assigned_at"] = attr["assigned_at"]
+
+    logger.info(f"Enriched {sum(1 for a in assignments if 'assigned_by' in a)}/{len(assignments)} assignments with attribution")
+
+
+def _enrich_permission_sets_with_attribution(permission_sets):
+    """Add 'created_by', 'created_at', 'updated_by', 'updated_at' to permission sets using CloudTrail."""
+    if not CLOUDTRAIL_TABLE or not permission_sets:
+        return
+
+    try:
+        sql = f"""
+            SELECT
+                eventtime,
+                eventname,
+                useridentity.arn AS actor_arn,
+                requestparameters,
+                responseelements
+            FROM {CLOUDTRAIL_TABLE}
+            WHERE eventsource = 'sso.amazonaws.com'
+              AND eventname IN ('CreatePermissionSet', 'UpdatePermissionSet',
+                  'PutInlinePolicyToPermissionSet', 'DeleteInlinePolicyFromPermissionSet',
+                  'AttachManagedPolicyToPermissionSet', 'DetachManagedPolicyFromPermissionSet',
+                  'AttachCustomerManagedPolicyReferenceToPermissionSet',
+                  'DetachCustomerManagedPolicyReferenceFromPermissionSet',
+                  'PutPermissionsBoundaryToPermissionSet', 'DeletePermissionsBoundaryFromPermissionSet')
+              AND errorcode IS NULL
+            ORDER BY eventtime ASC
+            LIMIT 5000
+        """
+        start_resp = athena.start_query_execution(
+            QueryString=sql,
+            QueryExecutionContext={"Database": ATHENA_DATABASE},
+            WorkGroup=ATHENA_WORKGROUP,
+        )
+        result = _wait_for_query(start_resp["QueryExecutionId"])
+        if result["QueryExecution"]["Status"]["State"] != "SUCCEEDED":
+            return
+        rows = _fetch_results(start_resp["QueryExecutionId"])
+    except Exception as exc:
+        logger.warning(f"Failed to query CloudTrail for permission set attribution: {exc}")
+        return
+
+    # Build lookup per permission set ARN
+    created = {}  # ps_arn → {by, at}
+    updated = {}  # ps_arn → {by, at}
+
+    for row in rows:
+        # Extract permission set ARN from requestparameters or responseelements
+        ps_arn = ""
+        try:
+            params = json.loads(row.get("requestparameters", "{}"))
+            ps_arn = params.get("permissionSetArn", "")
+        except (json.JSONDecodeError, TypeError):
+            pass
+        # For CreatePermissionSet, the ARN is in responseElements
+        if not ps_arn:
+            try:
+                resp = json.loads(row.get("responseelements", "{}"))
+                ps_arn = resp.get("permissionSet", {}).get("permissionSetArn", "")
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if not ps_arn:
+            continue
+        arn = row.get("actor_arn", "")
+        actor = arn.split("/")[-1] if "/" in arn else arn.split(":")[-1] if ":" in arn else arn
+        event_time = row.get("eventtime", "")
+
+        if row.get("eventname") == "CreatePermissionSet" and ps_arn not in created:
+            created[ps_arn] = {"by": actor, "at": event_time}
+
+        # Always update to latest (results ordered ASC, so last one wins)
+        updated[ps_arn] = {"by": actor, "at": event_time}
+
+    # Merge into permission sets
+    for ps in permission_sets:
+        ps_arn = ps.get("arn", "")
+        if ps_arn in created:
+            ps["created_by"] = created[ps_arn]["by"]
+            ps["created_at"] = created[ps_arn]["at"]
+        if ps_arn in updated:
+            ps["updated_by"] = updated[ps_arn]["by"]
+            ps["updated_at"] = updated[ps_arn]["at"]
+
+    logger.info(f"Enriched {sum(1 for p in permission_sets if 'updated_by' in p)}/{len(permission_sets)} permission sets with attribution")
+
+
+def _build_audit_lookups():
+    """Build lookup maps from existing S3 inventory data for resolving IDs to names."""
+    lookups = {"accounts": {}, "principals": {}, "permission_sets": {}}
+
+    # Load ALL assignment snapshots for account and principal name resolution
+    # This catches deleted groups/users that only exist in older snapshots
+    try:
+        dates = _get_available_dates()
+        for snapshot_date in dates:
+            try:
+                cached = _get_cached_summary(snapshot_date)
+                if cached and "assignments" in cached:
+                    for row in cached["assignments"]:
+                        aid = row.get("account_id", "")
+                        aname = row.get("account_name", "")
+                        if aid and aname and aid not in lookups["accounts"]:
+                            lookups["accounts"][aid] = aname
+                        pid = row.get("principal_id", "")
+                        pname = row.get("principal_name", "")
+                        if pid and pname and pid not in lookups["principals"]:
+                            lookups["principals"][pid] = pname
+            except Exception:
+                continue
+    except Exception as exc:
+        logger.warning(f"Failed to load assignment lookups: {exc}")
+
+    # Load ALL permission set snapshots for ARN → name resolution
+    # This catches deleted permission sets that only exist in older snapshots
+    try:
+        ps_dates = _get_available_dates(prefix="permission_sets/snapshot_date=")
+        for ps_date in ps_dates:
+            try:
+                s3_key = f"permission_sets/snapshot_date={ps_date}/permission_sets.json"
+                obj = s3.get_object(Bucket=INVENTORY_BUCKET, Key=s3_key)
+                raw = obj["Body"].read().decode("utf-8")
+                for line in raw.strip().split("\n"):
+                    if line.strip():
+                        ps = json.loads(line)
+                        ps_arn = ps.get("arn", "")
+                        ps_name = ps.get("name", "")
+                        if ps_arn and ps_name and ps_arn not in lookups["permission_sets"]:
+                            lookups["permission_sets"][ps_arn] = ps_name
+            except Exception:
+                continue
+    except Exception as exc:
+        logger.warning(f"Failed to load permission set lookups: {exc}")
+
+    logger.info(f"Audit lookups: {len(lookups['accounts'])} accounts, "
+                f"{len(lookups['principals'])} principals, "
+                f"{len(lookups['permission_sets'])} permission sets")
+    return lookups
+
+
+def _build_change_history_sql(start_date, end_date, category):
+    """Build SQL to query CloudTrail for SSO change events."""
+    # Build event name filter
+    if category == "assignments":
+        event_names = SSO_EVENT_CATEGORIES["assignments"]
+    elif category == "permission_sets":
+        event_names = SSO_EVENT_CATEGORIES["permission_sets"]
+    else:
+        event_names = list(SSO_EVENT_NAMES.keys())
+
+    event_list = ", ".join(f"'{e}'" for e in event_names)
+
+    return f"""
+        SELECT
+            eventtime,
+            eventname,
+            useridentity.arn AS actor_arn,
+            useridentity.principalid AS actor_principal_id,
+            useridentity.type AS actor_type,
+            sourceipaddress,
+            useragent,
+            requestparameters,
+            responseelements,
+            errorcode,
+            errormessage,
+            eventid
+        FROM {CLOUDTRAIL_TABLE}
+        WHERE eventsource = 'sso.amazonaws.com'
+          AND eventname IN ({event_list})
+          AND eventtime >= '{start_date}T00:00:00Z'
+          AND eventtime <= '{end_date}T23:59:59Z'
+        ORDER BY eventtime DESC
+        LIMIT 1000
+    """
+
+
+def _build_date_partition_filter(start_date, end_date):
+    """Build year/month/day partition WHERE clause for efficient CloudTrail queries."""
+    start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end = datetime.strptime(end_date, "%Y-%m-%d").date()
+
+    if start.year == end.year and start.month == end.month:
+        # Same month — precise day filter
+        days = ", ".join(f"'{d:02d}'" for d in range(start.day, end.day + 1))
+        return (f"year = '{start.year}' AND month = '{start.month:02d}' "
+                f"AND day IN ({days})")
+
+    # Multi-month range: generate OR clauses per month
+    import calendar
+    parts = []
+    current = start
+    while current <= end:
+        if current.year == end.year and current.month == end.month:
+            days_end = end.day
+        else:
+            days_end = calendar.monthrange(current.year, current.month)[1]
+
+        days_start = current.day if current == start else 1
+
+        parts.append(
+            f"(year = '{current.year}' AND month = '{current.month:02d}' "
+            f"AND day >= '{days_start:02d}' AND day <= '{days_end:02d}')"
+        )
+
+        if current.month == 12:
+            current = current.replace(year=current.year + 1, month=1, day=1)
+        else:
+            current = current.replace(month=current.month + 1, day=1)
+
+    return "(" + " OR ".join(parts) + ")"
 
 
 def _response(status_code, body, event=None):
