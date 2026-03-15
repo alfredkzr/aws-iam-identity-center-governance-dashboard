@@ -174,6 +174,16 @@ resource "aws_iam_role_policy" "athena_proxy_lambda_policy" {
           "${aws_s3_bucket.cache.arn}/*"
         ]
       }
+      ,
+      {
+        Sid    = "IdentityStoreRead"
+        Effect = "Allow"
+        Action = [
+          "identitystore:DescribeGroup",
+          "identitystore:DescribeUser"
+        ]
+        Resource = "*"
+      }
       ], local.cloudtrail_enabled ? [
       {
         Sid    = "S3ReadCloudTrail"

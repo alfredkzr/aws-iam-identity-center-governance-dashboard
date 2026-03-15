@@ -100,6 +100,7 @@ resource "aws_lambda_function" "athena_proxy" {
       CLOUDTRAIL_TABLE             = local.cloudtrail_enabled ? local.cloudtrail_table_name : ""
       CLOUDTRAIL_ACCOUNT_ID        = var.management_account_id
       CLOUDTRAIL_REGION            = var.aws_region
+      IDENTITY_STORE_ID            = var.identity_store_id
     }
   }
 }

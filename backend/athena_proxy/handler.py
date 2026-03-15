@@ -46,6 +46,7 @@ LOCAL_API_KEY = os.environ.get("LOCAL_API_KEY", "")
 CLOUDTRAIL_TABLE = os.environ.get("CLOUDTRAIL_TABLE", "")
 CLOUDTRAIL_ACCOUNT_ID = os.environ.get("CLOUDTRAIL_ACCOUNT_ID", "")
 CLOUDTRAIL_REGION = os.environ.get("CLOUDTRAIL_REGION", "")
+IDENTITY_STORE_ID = os.environ.get("IDENTITY_STORE_ID", "")
 
 RISK_POLICIES_KEY = "risk-policies.json"
 
@@ -112,6 +113,43 @@ s3 = boto3.client("s3", config=boto_config)
 # Module-level cache for validated tokens: {token_hash: expiry_timestamp}
 _token_cache = {}
 _TOKEN_CACHE_MAX = 200
+
+# Module-level cache for Identity Store principal resolution
+_identity_cache = {}
+
+
+def _resolve_principal_name(principal_id, principal_type):
+    """Resolve a principal ID to a name using Identity Store API.
+
+    Used as a fallback when the principal (group or user) was never captured
+    in any crawler snapshot — e.g. created and deleted between crawl runs.
+    """
+    if not IDENTITY_STORE_ID or not principal_id:
+        return None
+    cache_key = f"{principal_type}:{principal_id}"
+    if cache_key in _identity_cache:
+        return _identity_cache[cache_key]
+
+    try:
+        identity_client = boto3.client(
+            "identitystore",
+            config=Config(retries={"max_attempts": 3, "mode": "adaptive"}),
+        )
+        if principal_type == "GROUP":
+            resp = identity_client.describe_group(
+                IdentityStoreId=IDENTITY_STORE_ID, GroupId=principal_id
+            )
+            name = resp.get("DisplayName", principal_id)
+        else:
+            resp = identity_client.describe_user(
+                IdentityStoreId=IDENTITY_STORE_ID, UserId=principal_id
+            )
+            name = resp.get("DisplayName") or resp.get("UserName", principal_id)
+        _identity_cache[cache_key] = name
+        return name
+    except Exception:
+        _identity_cache[cache_key] = None
+        return None
 
 
 def _validate_token(event):
@@ -852,6 +890,13 @@ def _handle_change_history(event):
                 if params.get("name"):
                     # CreatePermissionSet has name in request
                     resolved["permission_set"] = params["name"]
+                # Fallback: resolve unresolved principal IDs via Identity Store API
+                if resolved.get("principal") and re.match(r"^[0-9a-f]{8}-", resolved["principal"]):
+                    real_name = _resolve_principal_name(
+                        resolved["principal"], resolved.get("principal_type", "")
+                    )
+                    if real_name:
+                        resolved["principal"] = real_name
                 if params.get("managedPolicyArn"):
                     resolved["policy"] = params["managedPolicyArn"].split("/")[-1]
                 if params.get("customerManagedPolicyReference"):
